@@ -1,6 +1,8 @@
-![ML_Project_Diagram](https://github.com/user-attachments/assets/96f8a85a-7f04-4e9f-8d51-fa21e793efb8)
 # ML-24-25
 During the winter semester24/25, University of Hamburg students Rissal, Sesugh and Longqin are collaborating on a machine learning project
+
+![ML_Project_Diagram](https://github.com/user-attachments/assets/96f8a85a-7f04-4e9f-8d51-fa21e793efb8)
+
 
 # Git Commit Message Generation
 
