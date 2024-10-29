@@ -1,7 +1,7 @@
 # ML-24-25
 During the winter semester24/25, University of Hamburg students Rissal, Sesugh and Longqin are collaborating on a machine learning project
 
-[ML_Data_Pipeline.drawio.pdf](https://github.com/user-attachments/files/17562939/ML_Data_Pipeline.drawio.pdf)
+![ML_Data_Pipeline drawio](https://github.com/user-attachments/assets/9c9d0515-f1cf-4dc8-aca3-f059ccd2d812)
 
 # Git Commit Message Generation
 
