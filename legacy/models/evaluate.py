@@ -5,8 +5,8 @@ Model Evaluation Module
 """
 
 from transformers import GPT2Tokenizer
-from models.model import get_model
-from utils.utils import CommitDataset
+from legacy.models.model import get_model
+from legacy.utils import CommitDataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
