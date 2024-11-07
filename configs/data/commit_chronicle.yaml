@@ -1,0 +1,14 @@
+_target_: src.data.commit_chronicle.CommitChronicleDataModule
+data_dir: ${paths.data_dir}/commit-chronicle
+languages: ["Go"]
+
+
+diff_tokenizer_name_or_path: Salesforce/codet5-base
+msg_tokenizer_name_or_path: Salesforce/codet5-base
+model_configuration: Salesforce/codet5-base
+
+# data loader stuff
+batch_size: 16 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+num_workers: 16
+pin_memory: False
+

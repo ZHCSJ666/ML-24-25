@@ -4,7 +4,7 @@
 # python train.py experiment=example
 
 defaults:
-  - override /data: mnist
+  - override /data: commit_chronicle
   - override /model: mnist
   - override /callbacks: default
   - override /trainer: default
@@ -12,7 +12,7 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["mnist", "simple_dense_net"]
+tags: ["commit_chronicle", "simple_dense_net"]
 
 seed: 12345
 

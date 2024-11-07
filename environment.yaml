@@ -49,3 +49,4 @@ dependencies:
       - sacrebleu
       - rapidfuzz
       - marisa-trie
+      - polars # for https://github.com/huggingface/datasets/issues/3644#issuecomment-1997484590

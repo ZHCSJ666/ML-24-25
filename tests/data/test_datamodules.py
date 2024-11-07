@@ -1,30 +1,27 @@
 from pathlib import Path
 
-import pytest
+import rootutils
 
 from src.data.commit_chronicle import CommitChronicleDataModule
-import rootutils
 
 ROOT = rootutils.find_root(__file__, ".project-root")
 
-@pytest.mark.parametrize("batch_size", [32, 128])
-def test_commit_chronicle_datamodule(batch_size: int) -> None:
+def test_commit_chronicle_datamodule() -> None:
     """Tests `CommitChronicleDataModule` to verify that it can be downloaded correctly, that the necessary
     attributes were created (e.g., the dataloader objects), and that dtypes and batch sizes
     correctly match.
-
-    :param batch_size: Batch size of the data to be loaded by the dataloader.
     """
-    data_dir = str(ROOT / "data/commit-chronicle")
+    data_dir = str(ROOT / "data/datasets/commit-chronicle")
 
-    dm = CommitChronicleDataModule(data_dir=data_dir, batch_size=batch_size)
+    dm = CommitChronicleDataModule(data_dir=data_dir,  batch_size=2)
     dm.prepare_data()
 
-    assert not dm.dataset
+    assert not dm.data_test
     assert Path(data_dir).exists()
-    assert Path(data_dir, "dataset_dict.json").exists()
+    assert Path(data_dir, "processed/test/dataset_info.json").exists()
 
     dm.setup()
-    assert dm.dataset
+    assert dm.data_test and len(dm.data_test) and dm.data_test[0]
+    print(dm.data_test[0])
     assert dm.train_dataloader() and dm.val_dataloader() and dm.test_dataloader()
 
