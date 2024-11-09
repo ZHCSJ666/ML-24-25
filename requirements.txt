@@ -16,3 +16,4 @@ marisa-trie
 polars
 torch
 datasets
+transformers
