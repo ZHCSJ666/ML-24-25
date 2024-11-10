@@ -15,6 +15,7 @@ class CommitMessageGenerationModule(LightningModule):
 
     def __init__(
         self,
+        model_name: str,
         net: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
@@ -32,7 +33,7 @@ class CommitMessageGenerationModule(LightningModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
-
+        self.criterion = torch.nn.CrossEntropyLoss()
         self.net = net
 
     def forward(self, batch: Batch) -> Any:
@@ -45,18 +46,29 @@ class CommitMessageGenerationModule(LightningModule):
         pass
 
     def model_step(self, batch: Batch, split: str) -> dict:
-        forward_outputs = self.forward(batch)
+        """Perform a single model step on a batch of data.
+
+        :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
+
+        :return: A dict containing (in order):
+            - A tensor of losses.
+            - A tensor of predictions.
+            - A tensor of target labels.
+        """
+        logits = self.forward(batch)
         outputs = {}
-        if split in ["train", "val"]:
+        if split in ["train", "validation"]:
             self.log(
                 f"{split}/loss",
-                forward_outputs.loss,
                 on_step=True,
                 on_epoch=True,
                 logger=True,
                 batch_size=len(batch.encoder_input_ids),
             )
-            outputs["loss"] = forward_outputs.loss
+        loss = self.criterion(logits, batch.labels)
+        outputs["loss"] = loss
+        outputs["predictions"] = logits
+        outputs["target"] = batch.labels
         return outputs
 
     def training_step(self, batch: BatchTrain, batch_idx: int) -> dict:

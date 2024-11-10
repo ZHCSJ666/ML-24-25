@@ -1,0 +1,26 @@
+_target_: src.models.cmg_module.CommitMessageGenerationModule
+model_name: "simple-transformer"
+optimizer:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.001
+  weight_decay: 0.0
+
+scheduler:
+  _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+  _partial_: true
+  mode: min
+  factor: 0.1
+  patience: 10
+
+net:
+  _target_: src.models.components.simple_transformer.SimpleTransformer
+  embed_size: 256
+  num_heads: 8
+  hidden_dim: 512
+  num_layers: 3
+  dropout: 0.1
+  vocab_size: ??? # This will be overridden by the data module
+
+# compile model for faster training with pytorch 2.0
+compile: false
