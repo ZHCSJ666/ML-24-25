@@ -2,9 +2,11 @@ from typing import Any, Dict
 
 import torch
 from lightning import LightningModule
-
-from src.data.types import Batch, BatchTest, BatchTrain
-
+import torch.nn as nn
+from data.components.tokenization import load_tokenizers
+from data.types import Batch, BatchTest, BatchTrain
+from transformers import PreTrainedTokenizerBase, AutoTokenizer
+from torchmetrics import BLEUScore
 
 class CommitMessageGenerationModule(LightningModule):
     """Git commit message generation module.
@@ -20,6 +22,8 @@ class CommitMessageGenerationModule(LightningModule):
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
+        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained("Salesforce/codet5-base")
+        
     ) -> None:
         """Initialize a `EncoderDecoderLitModule`.
 
@@ -33,8 +37,20 @@ class CommitMessageGenerationModule(LightningModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.save_hyperparameters(logger=False)
+
+        # Define the loss criterion
+        self.criterion = nn.CrossEntropyLoss(ignore_index=-100)  # Updated to ignore padding tokens
+
+        # Assign the model
         self.net = net
+
+        # Assign the tokenizer for decoding
+        self.tokenizer = tokenizer
+
+        # Initialize BLEU score metrics for validation and testing
+        self.val_bleu = BLEUScore()
+        self.test_bleu = BLEUScore()
 
     def forward(self, batch: Batch) -> Any:
         return self.net(batch)
@@ -45,43 +61,97 @@ class CommitMessageGenerationModule(LightningModule):
         # so it's worth to make sure validation metrics don't store results from these checks
         pass
 
-    def model_step(self, batch: Batch, split: str) -> dict:
+    def model_step(self, batch: Batch, split: str) -> Dict[str, Any]:
         """Perform a single model step on a batch of data.
 
-        :param batch: A batch of data (a tuple) containing the input tensor of images and target labels.
-
-        :return: A dict containing (in order):
-            - A tensor of losses.
-            - A tensor of predictions.
-            - A tensor of target labels.
+        :param batch: A batch of data.
+        :param split: One of "train", "val", or "test".
+        :return: A dictionary containing loss and, if applicable, BLEU scores.
         """
-        logits = self.forward(batch)
-        outputs = {}
-        if split in ["train", "validation"]:
-            self.log(
-                f"{split}/loss",
-                on_step=True,
-                on_epoch=True,
-                logger=True,
-                batch_size=len(batch.encoder_input_ids),
-            )
-        loss = self.criterion(logits, batch.labels)
-        outputs["loss"] = loss
-        outputs["predictions"] = logits
-        outputs["target"] = batch.labels
-        return outputs
+        # Forward pass
+        outputs = self.forward(batch)  # Shape: (batch, seq_len, vocab_size)
 
-    def training_step(self, batch: BatchTrain, batch_idx: int) -> dict:
-        outputs = self.model_step(batch, "train")
-        # return loss or backpropagation will fail
-        return outputs
+        result = {}
+
+        if isinstance(batch, BatchTrain):
+            # Reshape outputs and labels for loss computation
+            logits = outputs.view(-1, outputs.size(-1))  # (batch * seq_len, vocab_size)
+            labels = batch.labels.view(-1)  # (batch * seq_len)
+
+            # Compute loss
+            loss = self.criterion(logits, labels)
+            result["loss"] = loss
+
+            if split == "val":
+                # Compute BLEU score
+                preds = torch.argmax(outputs, dim=-1)  # (batch, seq_len)
+                preds = preds.cpu().numpy().tolist()
+                targets = batch.labels.cpu().numpy().tolist()
+
+                # Decode predictions and targets
+                decoded_preds = [self.tokenizer_decode(p) for p in preds]
+                decoded_targets = [self.tokenizer_decode(t) for t in targets]
+
+                # Update BLEU score
+                bleu = self.val_bleu(decoded_preds, decoded_targets)
+                result["val_bleu"] = bleu
+
+        elif isinstance(batch, BatchTest):
+            # During testing, generate commit messages and compute BLEU scores
+            generated_ids = self.net.generate(
+                src=batch,
+                max_length=self.hparams.max_length if hasattr(self.hparams, 'max_length') else 512,
+                num_beams=self.hparams.num_beams if hasattr(self.hparams, 'num_beams') else 5,
+                early_stopping=True,
+            )
+
+            # Decode generated sequences
+            decoded_preds = [self.tokenizer.decode(g, skip_special_tokens=True) for g in generated_ids.cpu().numpy().tolist()]
+            decoded_targets = batch.targets  # List[str]
+
+            # Compute BLEU score
+            bleu = self.test_bleu(decoded_preds, decoded_targets)
+            result["test_bleu"] = bleu
+
+        return result
+
+    def training_step(self, batch: BatchTrain, batch_idx: int) -> Dict[str, Any]:
+        """Training step.
+
+        :param batch: A training batch.
+        :param batch_idx: Index of the batch.
+        :return: Dictionary containing the loss.
+        """
+        result = self.model_step(batch, "train")
+        loss = result["loss"]
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return {"loss": loss}
+    
+    def test_step(self, batch: BatchTest, batch_idx: int) -> None:
+        """Test step.
+
+        :param batch: A test batch.
+        :param batch_idx: Index of the batch.
+        """
+        result = self.model_step(batch, "test")
+        bleu = result["test_bleu"]
+        self.log("test_bleu", bleu, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
         pass
 
     def validation_step(self, batch: BatchTrain, batch_idx: int) -> None:
-        self.model_step(batch, "val")
+        """Validation step.
+
+        :param batch: A validation batch.
+        :param batch_idx: Index of the batch.
+        """
+        result = self.model_step(batch, "val")
+        loss = result["loss"]
+        bleu = result["val_bleu"]
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log("val_bleu", bleu, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""
