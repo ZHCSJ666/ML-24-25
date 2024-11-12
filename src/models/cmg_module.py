@@ -37,20 +37,11 @@ class CommitMessageGenerationModule(LightningModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
-        self.save_hyperparameters(logger=False)
-
-        # Define the loss criterion
         self.criterion = nn.CrossEntropyLoss(ignore_index=-100)  # Updated to ignore padding tokens
 
-        # Assign the model
         self.net = net
 
-        # Assign the tokenizer for decoding
         self.tokenizer = tokenizer
-
-        # Initialize BLEU score metrics for validation and testing
-        self.val_bleu = BLEUScore()
-        self.test_bleu = BLEUScore()
 
     def forward(self, batch: Batch) -> Any:
         return self.net(batch)
@@ -74,44 +65,12 @@ class CommitMessageGenerationModule(LightningModule):
         result = {}
 
         if isinstance(batch, BatchTrain):
-            # Reshape outputs and labels for loss computation
-            logits = outputs.view(-1, outputs.size(-1))  # (batch * seq_len, vocab_size)
+            preds = outputs.view(-1, outputs.size(-1))  # (batch * seq_len)
             labels = batch.labels.view(-1)  # (batch * seq_len)
 
             # Compute loss
-            loss = self.criterion(logits, labels)
+            loss = self.criterion(preds, labels)
             result["loss"] = loss
-
-            if split == "val":
-                # Compute BLEU score
-                preds = torch.argmax(outputs, dim=-1)  # (batch, seq_len)
-                preds = preds.cpu().numpy().tolist()
-                targets = batch.labels.cpu().numpy().tolist()
-
-                # Decode predictions and targets
-                decoded_preds = [self.tokenizer_decode(p) for p in preds]
-                decoded_targets = [self.tokenizer_decode(t) for t in targets]
-
-                # Update BLEU score
-                bleu = self.val_bleu(decoded_preds, decoded_targets)
-                result["val_bleu"] = bleu
-
-        elif isinstance(batch, BatchTest):
-            # During testing, generate commit messages and compute BLEU scores
-            generated_ids = self.net.generate(
-                src=batch,
-                max_length=self.hparams.max_length if hasattr(self.hparams, 'max_length') else 512,
-                num_beams=self.hparams.num_beams if hasattr(self.hparams, 'num_beams') else 5,
-                early_stopping=True,
-            )
-
-            # Decode generated sequences
-            decoded_preds = [self.tokenizer.decode(g, skip_special_tokens=True) for g in generated_ids.cpu().numpy().tolist()]
-            decoded_targets = batch.targets  # List[str]
-
-            # Compute BLEU score
-            bleu = self.test_bleu(decoded_preds, decoded_targets)
-            result["test_bleu"] = bleu
 
         return result
 
@@ -134,8 +93,8 @@ class CommitMessageGenerationModule(LightningModule):
         :param batch_idx: Index of the batch.
         """
         result = self.model_step(batch, "test")
-        bleu = result["test_bleu"]
-        self.log("test_bleu", bleu, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        loss = result["loss"]
+        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
@@ -149,9 +108,7 @@ class CommitMessageGenerationModule(LightningModule):
         """
         result = self.model_step(batch, "val")
         loss = result["loss"]
-        bleu = result["val_bleu"]
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        self.log("val_bleu", bleu, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""
