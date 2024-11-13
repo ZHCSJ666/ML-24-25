@@ -1,0 +1,51 @@
+name: cmg # short for commit message generation
+channels:
+  - pytorch
+  - nvidia
+  - huggingface
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pytorch=2.3.1
+  - torchvision=0.*
+  - torchtext
+  - lightning=2.*
+  - torchmetrics=0.*
+  - hydra-core=1.*
+  - rich=13.*
+  - pre-commit=3.*
+  - pytest=7.*
+  - pandas
+  - transformers
+  - datasets
+  - evaluate
+  - pandas
+  - numpy=1.24.*
+
+  # --------- loggers --------- #
+  # - wandb
+  # - neptune-client
+  # - mlflow
+  # - comet-ml
+  # - aim>=3.16.2 # no lower than 3.16.2, see https://github.com/aimhubio/aim/issues/2550
+
+  - pip>=23
+  - pip:
+      - numpy==1.24.*
+      - hydra-optuna-sweeper
+      - hydra-colorlog
+      - rootutils
+      - jupyter
+      - tqdm
+      - black[jupyter]
+      - matplotlib
+      - torchinfo
+      - tensorboardX
+      - sentencepiece # for flan models
+      - nltk
+      - rouge_score
+      - sacrebleu
+      - rapidfuzz
+      - marisa-trie
+      - polars # for https://github.com/huggingface/datasets/issues/3644#issuecomment-1997484590
