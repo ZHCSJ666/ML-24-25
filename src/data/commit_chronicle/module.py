@@ -8,13 +8,12 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoConfig
 
-from src.data.components.collators import DataCollatorTrain, DataCollatorTest
-from src.data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
-from src.data.components.tokenization import load_tokenizers
-from src.data.types import SingleExample
+from data.components.collators import DataCollatorTrain, DataCollatorTest
+from data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
+from data.components.tokenization import load_tokenizers
+from data.types import SingleExample
 
 
-# noinspection PyDefaultArgument
 class CommitChronicleDataModule(LightningDataModule):
     """`LightningDataModule` for the Commit Chronicle dataset.
 
@@ -32,7 +31,7 @@ class CommitChronicleDataModule(LightningDataModule):
         languages: List[str] = ["Go"],
         diff_tokenizer_name_or_path: str = "Salesforce/codet5-base",
         msg_tokenizer_name_or_path: str = "Salesforce/codet5-base",
-        model_configuration: str = "Salesforce/codet5-base",
+        model_configuration: str = "encoder",
         encoder_context_max_len: int = 512,
         decoder_context_max_len: int = 512,
         shift_labels: bool = True,
@@ -88,7 +87,7 @@ class CommitChronicleDataModule(LightningDataModule):
             add_history_to_inputs=add_history_to_inputs,
             decoder_context_max_length=decoder_context_max_len,
         )
-
+        self.vocab_size = self.msg_tokenizer.vocab_size
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
@@ -220,6 +219,8 @@ def get_decoder_start_token_id(model_cfg: str) -> Optional[int]:
     if model_cfg == "encoder_decoder":
         return None
     elif model_cfg == "decoder":
+        return None
+    elif model_cfg == "encoder":
         return None
     # assumes seq2seq
     config = AutoConfig.from_pretrained(model_cfg)

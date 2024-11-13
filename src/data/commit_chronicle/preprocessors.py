@@ -184,13 +184,15 @@ class CommitChroniclePreprocessor:
         Diffs are truncated to save memory. Special tokens are added later, during batch construction, so 2 extra tokens
         from max_length are reserved for BOS and EOS.
         """
-        return self._diff_tokenizer(
+        tokenized_input = self._diff_tokenizer(
             diffs,
             truncation=True,
             max_length=self.diff_max_len - 2,
             padding=False,
             add_special_tokens=False,
         ).input_ids  # type: ignore[operator]
+
+        return tokenized_input
 
     def _tokenize_messages(self, messages: List[str]) -> List[List[int]]:
         return self._msg_tokenizer(

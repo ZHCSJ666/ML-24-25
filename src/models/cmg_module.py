@@ -2,9 +2,11 @@ from typing import Any, Dict
 
 import torch
 from lightning import LightningModule
-
-from src.data.types import Batch, BatchTest, BatchTrain
-
+import torch.nn as nn
+from data.components.tokenization import load_tokenizers
+from data.types import Batch, BatchTest, BatchTrain
+from transformers import PreTrainedTokenizerBase, AutoTokenizer
+from torchmetrics import BLEUScore
 
 class CommitMessageGenerationModule(LightningModule):
     """Git commit message generation module.
@@ -15,10 +17,13 @@ class CommitMessageGenerationModule(LightningModule):
 
     def __init__(
         self,
+        model_name: str,
         net: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
         compile: bool,
+        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained("Salesforce/codet5-base")
+        
     ) -> None:
         """Initialize a `EncoderDecoderLitModule`.
 
@@ -32,8 +37,11 @@ class CommitMessageGenerationModule(LightningModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
+        self.criterion = nn.CrossEntropyLoss(ignore_index=-100)  # Updated to ignore padding tokens
 
         self.net = net
+
+        self.tokenizer = tokenizer
 
     def forward(self, batch: Batch) -> Any:
         return self.net(batch)
@@ -44,32 +52,63 @@ class CommitMessageGenerationModule(LightningModule):
         # so it's worth to make sure validation metrics don't store results from these checks
         pass
 
-    def model_step(self, batch: Batch, split: str) -> dict:
-        forward_outputs = self.forward(batch)
-        outputs = {}
-        if split in ["train", "val"]:
-            self.log(
-                f"{split}/loss",
-                forward_outputs.loss,
-                on_step=True,
-                on_epoch=True,
-                logger=True,
-                batch_size=len(batch.encoder_input_ids),
-            )
-            outputs["loss"] = forward_outputs.loss
-        return outputs
+    def model_step(self, batch: Batch, split: str) -> Dict[str, Any]:
+        """Perform a single model step on a batch of data.
 
-    def training_step(self, batch: BatchTrain, batch_idx: int) -> dict:
-        outputs = self.model_step(batch, "train")
-        # return loss or backpropagation will fail
-        return outputs
+        :param batch: A batch of data.
+        :param split: One of "train", "val", or "test".
+        :return: A dictionary containing loss and, if applicable, BLEU scores.
+        """
+        # Forward pass
+        outputs = self.forward(batch)  # Shape: (batch, seq_len, vocab_size)
+
+        result = {}
+
+        if isinstance(batch, BatchTrain):
+            preds = outputs.view(-1, outputs.size(-1))  # (batch * seq_len)
+            labels = batch.labels.view(-1)  # (batch * seq_len)
+
+            # Compute loss
+            loss = self.criterion(preds, labels)
+            result["loss"] = loss
+
+        return result
+
+    def training_step(self, batch: BatchTrain, batch_idx: int) -> Dict[str, Any]:
+        """Training step.
+
+        :param batch: A training batch.
+        :param batch_idx: Index of the batch.
+        :return: Dictionary containing the loss.
+        """
+        result = self.model_step(batch, "train")
+        loss = result["loss"]
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return {"loss": loss}
+    
+    def test_step(self, batch: BatchTest, batch_idx: int) -> None:
+        """Test step.
+
+        :param batch: A test batch.
+        :param batch_idx: Index of the batch.
+        """
+        result = self.model_step(batch, "test")
+        loss = result["loss"]
+        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
         pass
 
     def validation_step(self, batch: BatchTrain, batch_idx: int) -> None:
-        self.model_step(batch, "val")
+        """Validation step.
+
+        :param batch: A validation batch.
+        :param batch_idx: Index of the batch.
+        """
+        result = self.model_step(batch, "val")
+        loss = result["loss"]
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""

@@ -17,3 +17,6 @@ polars
 torch
 datasets
 transformers
+tensorboard
+lightning
+rich

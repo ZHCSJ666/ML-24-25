@@ -6,7 +6,7 @@ from typing import List, Literal, Optional, Tuple
 
 import torch
 
-from src.data.types import SingleExample
+from data.types import SingleExample
 
 
 @dataclass
