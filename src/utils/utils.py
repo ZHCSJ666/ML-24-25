@@ -101,7 +101,6 @@ def get_metric_value(
     """Safely retrieves value of the metric logged in LightningModule.
 
     :param metric_dict: A dict containing metric values.
-    
     :param metric_name: If provided, the name of the metric to retrieve.
     :return: If a metric name was provided, the value of the metric.
     """

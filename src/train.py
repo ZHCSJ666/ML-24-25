@@ -58,7 +58,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: CommitChronicleDataModule = hydra.utils.instantiate(cfg.data)
     log.info(f"Instantiating model <{cfg.model._target_}>")
-    
+
     if cfg.model.model_name == "simple-transformer":
         cfg.model.net.vocab_size = datamodule.vocab_size
         # Initialize model with updated config
@@ -111,6 +111,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     metric_dict = {**train_metrics, **test_metrics}
 
     return metric_dict, object_dict
+
 
 @hydra.main(version_base="1.3", config_path="../configs", config_name="train.yaml")
 def main(cfg: DictConfig) -> Optional[float]:

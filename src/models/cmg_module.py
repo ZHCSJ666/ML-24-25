@@ -1,12 +1,12 @@
-from typing import Any, Dict
+from typing import Any, Dict, Callable
 
 import torch
-from lightning import LightningModule
 import torch.nn as nn
-from data.components.tokenization import load_tokenizers
-from data.types import Batch, BatchTest, BatchTrain
+from lightning import LightningModule
 from transformers import PreTrainedTokenizerBase, AutoTokenizer
-from torchmetrics import BLEUScore
+
+from src.data.types import Batch, BatchTest, BatchTrain
+
 
 class CommitMessageGenerationModule(LightningModule):
     """Git commit message generation module.
@@ -18,12 +18,13 @@ class CommitMessageGenerationModule(LightningModule):
     def __init__(
         self,
         model_name: str,
-        net: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler,
+        net: nn.Module,
+        optimizer: Callable[..., torch.optim.Optimizer],
+        scheduler: Callable[..., torch.optim.lr_scheduler],
         compile: bool,
-        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained("Salesforce/codet5-base")
-        
+        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
+            "Salesforce/codet5-base"
+        ),
     ) -> None:
         """Initialize a `EncoderDecoderLitModule`.
 
@@ -37,7 +38,9 @@ class CommitMessageGenerationModule(LightningModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
-        self.criterion = nn.CrossEntropyLoss(ignore_index=-100)  # Updated to ignore padding tokens
+        self.criterion = nn.CrossEntropyLoss(
+            ignore_index=-100
+        )  # Updated to ignore padding tokens
 
         self.net = net
 
@@ -83,9 +86,11 @@ class CommitMessageGenerationModule(LightningModule):
         """
         result = self.model_step(batch, "train")
         loss = result["loss"]
-        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log(
+            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
+        )
         return {"loss": loss}
-    
+
     def test_step(self, batch: BatchTest, batch_idx: int) -> None:
         """Test step.
 
@@ -94,7 +99,9 @@ class CommitMessageGenerationModule(LightningModule):
         """
         result = self.model_step(batch, "test")
         loss = result["loss"]
-        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log(
+            "test_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True
+        )
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
@@ -108,7 +115,9 @@ class CommitMessageGenerationModule(LightningModule):
         """
         result = self.model_step(batch, "val")
         loss = result["loss"]
-        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        self.log(
+            "val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True
+        )
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""

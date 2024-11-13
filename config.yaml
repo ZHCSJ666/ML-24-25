@@ -10,8 +10,8 @@ data:
   validation_split: 0.1
 
 model:
-  model_name: 
-  save_dir: 
+  model_name:
+  save_dir:
 
 training:
   batch_size: 16

@@ -8,10 +8,10 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoConfig
 
-from data.components.collators import DataCollatorTrain, DataCollatorTest
-from data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
-from data.components.tokenization import load_tokenizers
-from data.types import SingleExample
+from src.data.components.collators import DataCollatorTrain, DataCollatorTest
+from src.data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
+from src.data.components.tokenization import load_tokenizers
+from src.data.types import SingleExample
 
 
 class CommitChronicleDataModule(LightningDataModule):

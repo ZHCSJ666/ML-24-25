@@ -166,7 +166,6 @@ class DataCollatorTrain(BaseCollatorUtils):
             )
 
             return BatchTrain(
-                
                 encoder_input_ids=encoder_input_ids,
                 encoder_attention_mask=encoder_attention_mask,
                 decoder_input_ids=decoder_input_ids,

@@ -22,6 +22,8 @@ dependencies:
   - evaluate
   - pandas
   - numpy=1.24.*
+  - seaborn
+  - jupyterlab
 
   # --------- loggers --------- #
   # - wandb
@@ -36,7 +38,6 @@ dependencies:
       - hydra-optuna-sweeper
       - hydra-colorlog
       - rootutils
-      - jupyter
       - tqdm
       - black[jupyter]
       - matplotlib
