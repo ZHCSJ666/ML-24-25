@@ -6,9 +6,8 @@ from typing import List, Optional, Tuple
 import torch
 from transformers import PreTrainedTokenizerFast
 
-
+from ...types import BatchTest, SingleExample
 from .base_collator_utils import BaseCollatorUtils
-from ...types import SingleExample, BatchTest
 
 
 @dataclass
@@ -42,8 +41,8 @@ class DataCollatorTest(BaseCollatorUtils):
     def _process_msg_gen(
         self, message_ids: List[int], context_len: Optional[int] = None
     ) -> Tuple[List[int], str, str]:
-        """Builds context and target for completion-style generation.
-        The last word in context is treated as prefix for the first generated word.
+        """Builds context and target for completion-style generation. The last word in context is
+        treated as prefix for the first generated word.
 
         Args:
             message_ids: Input message, tokenized.
@@ -87,8 +86,7 @@ class DataCollatorTest(BaseCollatorUtils):
     def _process_decoder_input(
         self, examples: List[SingleExample]
     ) -> Tuple[torch.Tensor, torch.Tensor, List[str], List[str]]:
-        """
-        Process the input examples into decoder input on evaluation stage.
+        """Process the input examples into decoder input on evaluation stage.
 
         The input examples are processed as follows:
             * The message input ids and history input ids for each example are extracted.
@@ -106,12 +104,8 @@ class DataCollatorTest(BaseCollatorUtils):
                 A list of target strings for each example.
                 A list of prefix strings for each example.
         """
-        message_inputs: List[List[int]] = [
-            example.msg_input_ids for example in examples
-        ]
-        history_inputs: List[List[List[int]]] = [
-            example.history_input_ids for example in examples
-        ]
+        message_inputs: List[List[int]] = [example.msg_input_ids for example in examples]
+        history_inputs: List[List[List[int]]] = [example.history_input_ids for example in examples]
 
         all_msg_ids: List[torch.Tensor] = []
         all_msg_masks: List[torch.Tensor] = []
@@ -177,6 +171,7 @@ class DataCollatorTest(BaseCollatorUtils):
         )
 
     def __call__(self, examples: List[SingleExample]) -> BatchTest:
+        """Processes a list of examples into a BatchTest object."""
         if not self.testing:
             (
                 (encoder_input_ids, encoder_attention_mask),
@@ -184,9 +179,12 @@ class DataCollatorTest(BaseCollatorUtils):
                 (retrieved_msg_input_ids, retrieved_msg_attention_mask),
             ) = self._process_encoder_input(examples=examples)
 
-            decoder_input_ids, decoder_attention_mask, targets, prefixes = (
-                self._process_decoder_input(examples=examples)
-            )
+            (
+                decoder_input_ids,
+                decoder_attention_mask,
+                targets,
+                prefixes,
+            ) = self._process_decoder_input(examples=examples)
 
             return BatchTest(
                 encoder_input_ids=encoder_input_ids,

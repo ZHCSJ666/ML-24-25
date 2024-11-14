@@ -6,8 +6,7 @@ import torch
 
 @torch.jit.script
 class SingleExample:
-    """
-    A class to represent a single example for a Git commit message generation project.
+    """A class to represent a single example for a Git commit message generation project.
 
     This class stores information related to a Git diff input, commit message, and commit history
     which are used as input features for a machine learning model in a Git commit message generation
@@ -44,6 +43,29 @@ class SingleExample:
 
 @dataclass
 class Batch:
+    """Represents a batch of data inputs for training a model designed to generate Git commit
+    messages from Git diffs.
+
+    Attributes:
+        encoder_input_ids (torch.Tensor): Tensor containing tokenized input sequences for the encoder.
+        encoder_attention_mask (torch.Tensor): Tensor representing the attention mask for the encoder input,
+                                               where non-zero values indicate positions with valid tokens.
+        decoder_input_ids (torch.Tensor): Tensor containing tokenized input sequences for the decoder, typically
+                                          containing the start token or previous token when generating output.
+        decoder_attention_mask (torch.Tensor): Tensor representing the attention mask for the decoder input,
+                                               used to focus on valid tokens in the decoder input sequence.
+        labels (Optional[torch.Tensor]): Tensor containing the target output tokens (labels) for training;
+                                         these are compared with the model’s predicted output during loss calculation.
+        retrieved_diff_input_ids (Optional[torch.Tensor]): Tensor containing tokenized sequences of retrieved diffs,
+                                                           which may provide context for the model.
+        retrieved_diff_attention_mask (Optional[torch.Tensor]): Attention mask for `retrieved_diff_input_ids`,
+                                                                marking valid token positions for these diffs.
+        retrieved_msg_input_ids (Optional[torch.Tensor]): Tensor containing tokenized sequences of retrieved commit
+                                                          messages, serving as additional context for the model.
+        retrieved_msg_attention_mask (Optional[torch.Tensor]): Attention mask for `retrieved_msg_input_ids`,
+                                                               marking valid token positions in the retrieved messages.
+    """
+
     encoder_input_ids: torch.Tensor
     encoder_attention_mask: torch.Tensor
     decoder_input_ids: torch.Tensor
@@ -55,6 +77,13 @@ class Batch:
     retrieved_msg_attention_mask: Optional[torch.Tensor]
 
     def pin_memory(self):
+        """Pins all tensors to memory, making them GPU-accessible for faster data transfer if using
+        a CUDA-capable device. This operation converts all available attributes to pinned memory,
+        provided they are not None.
+
+        Returns:
+            self (Batch): The batch instance with all tensors pinned to memory.
+        """
         self.encoder_input_ids = self.encoder_input_ids.pin_memory()
         self.encoder_attention_mask = self.encoder_attention_mask.pin_memory()
         self.decoder_input_ids = self.decoder_input_ids.pin_memory()
@@ -64,20 +93,25 @@ class Batch:
         if self.retrieved_diff_input_ids is not None:
             self.retrieved_diff_input_ids = self.retrieved_diff_input_ids.pin_memory()
         if self.retrieved_diff_attention_mask is not None:
-            self.retrieved_diff_attention_mask = (
-                self.retrieved_diff_attention_mask.pin_memory()
-            )
+            self.retrieved_diff_attention_mask = self.retrieved_diff_attention_mask.pin_memory()
         if self.retrieved_msg_input_ids is not None:
             self.retrieved_msg_input_ids = self.retrieved_msg_input_ids.pin_memory()
         if self.retrieved_msg_attention_mask is not None:
-            self.retrieved_msg_attention_mask = (
-                self.retrieved_msg_attention_mask.pin_memory()
-            )
+            self.retrieved_msg_attention_mask = self.retrieved_msg_attention_mask.pin_memory()
         return self
 
 
 @dataclass
 class BatchTrain(Batch):
+    """Represents a batch of training data .
+
+    Attributes:
+        labels (torch.Tensor): Tensor containing the target output tokens (labels) for training.
+                               These labels are compared with the model’s predicted output to compute loss
+                               during training. Unlike the optional `labels` attribute in `Batch`, `labels`
+                               in `BatchTrain` are required.
+    """
+
     labels: torch.Tensor
 
 

@@ -33,17 +33,25 @@ def test_decoder_input_with_history(msgs, histories, default_tokenizers):
     encoder_tok, decoder_tok = default_tokenizers
     inputs = []
     for i, (msg, history) in enumerate(zip(msgs, histories)):
-        msgs_ids = decoder_tok(msg, add_special_tokens=False, padding=False, truncation=False).input_ids
+        msgs_ids = decoder_tok(
+            msg, add_special_tokens=False, padding=False, truncation=False
+        ).input_ids
         if history:
-            history_ids = decoder_tok(history, add_special_tokens=False, padding=False, truncation=False).input_ids
+            history_ids = decoder_tok(
+                history, add_special_tokens=False, padding=False, truncation=False
+            ).input_ids
         else:
             history_ids = []
         inputs.append(
-            SingleExample(diff_input_ids=[], msg_input_ids=msgs_ids, history_input_ids=history_ids, pos_in_file=i)
+            SingleExample(
+                diff_input_ids=[],
+                msg_input_ids=msgs_ids,
+                history_input_ids=history_ids,
+                pos_in_file=i,
+            )
         )
 
     for context_ratio in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 1.0]:
-
         data_collator = DataCollatorTest(
             diff_bos_token_id=encoder_tok.bos_token_id,
             diff_eos_token_id=encoder_tok.eos_token_id,
@@ -62,7 +70,12 @@ def test_decoder_input_with_history(msgs, histories, default_tokenizers):
             testing=None,
             process_retrieved=False,
         )
-        decoder_input_ids, decoder_attention_mask, targets, prefixes = data_collator._process_decoder_input(inputs)
+        (
+            decoder_input_ids,
+            decoder_attention_mask,
+            targets,
+            prefixes,
+        ) = data_collator._process_decoder_input(inputs)
 
         # check left-side padding
         for message, mask in zip(decoder_input_ids, decoder_attention_mask):
@@ -70,13 +83,21 @@ def test_decoder_input_with_history(msgs, histories, default_tokenizers):
                 assert mask[0] == 0
                 assert torch.all(mask[: (mask == 0).nonzero().squeeze()[-1] + 1] == 0)
                 assert torch.all(mask[(mask == 0).nonzero().squeeze()[-1] + 1 :] == 1)
-                assert torch.all(message[: (mask == 0).nonzero().squeeze()[-1] + 1] == decoder_tok.pad_token_id)
-                assert torch.all(message[(mask == 0).nonzero().squeeze()[-1] + 1] == decoder_tok.bos_token_id)
+                assert torch.all(
+                    message[: (mask == 0).nonzero().squeeze()[-1] + 1] == decoder_tok.pad_token_id
+                )
+                assert torch.all(
+                    message[(mask == 0).nonzero().squeeze()[-1] + 1] == decoder_tok.bos_token_id
+                )
 
     for context, prefix, target, msg in zip(decoder_input_ids, prefixes, targets, msgs):
         if decoder_tok.sep_token_id in context:
-            last_sep_idx = (context == decoder_tok.sep_token_id).nonzero(as_tuple=True)[0][-1].item()
-            decoded_context = decoder_tok.decode(context[last_sep_idx + 1 :], skip_special_tokens=True)
+            last_sep_idx = (
+                (context == decoder_tok.sep_token_id).nonzero(as_tuple=True)[0][-1].item()
+            )
+            decoded_context = decoder_tok.decode(
+                context[last_sep_idx + 1 :], skip_special_tokens=True
+            )
         else:  # [SEP] might not be present if history is empty
             decoded_context = decoder_tok.decode(context, skip_special_tokens=True)
         assert decoded_context + prefix + target == msg
@@ -100,7 +121,6 @@ def test_decoder_input_without_history(default_tokenizers):
     ]
 
     for context_ratio in [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 1.0]:
-
         for encoder_input_type in ["diff", "history"]:
             data_collator = DataCollatorTest(
                 diff_bos_token_id=encoder_tok.bos_token_id,
@@ -122,7 +142,12 @@ def test_decoder_input_without_history(default_tokenizers):
                 testing=None,
                 process_retrieved=False,
             )
-        decoder_input_ids, decoder_attention_mask, targets, prefixes = data_collator._process_decoder_input(inputs)
+        (
+            decoder_input_ids,
+            decoder_attention_mask,
+            targets,
+            prefixes,
+        ) = data_collator._process_decoder_input(inputs)
 
         # check left-side padding
         for message, mask in zip(decoder_input_ids, decoder_attention_mask):
@@ -130,8 +155,12 @@ def test_decoder_input_without_history(default_tokenizers):
                 assert mask[0] == 0
                 assert torch.all(mask[: (mask == 0).nonzero().squeeze()[-1] + 1] == 0)
                 assert torch.all(mask[(mask == 0).nonzero().squeeze()[-1] + 1 :] == 1)
-                assert torch.all(message[: (mask == 0).nonzero().squeeze()[-1] + 1] == decoder_tok.pad_token_id)
-                assert torch.all(message[(mask == 0).nonzero().squeeze()[-1] + 1] == decoder_tok.bos_token_id)
+                assert torch.all(
+                    message[: (mask == 0).nonzero().squeeze()[-1] + 1] == decoder_tok.pad_token_id
+                )
+                assert torch.all(
+                    message[(mask == 0).nonzero().squeeze()[-1] + 1] == decoder_tok.bos_token_id
+                )
 
         for context, prefix, target, msg in zip(decoder_input_ids, prefixes, targets, msgs):
             decoded_context = decoder_tok.decode(context, skip_special_tokens=True)
@@ -161,46 +190,77 @@ def test_process_msg_gen(default_tokenizers):
     )
 
     message = "Simple message example"
-    message_ids = decoder_tok(message, add_special_tokens=False, padding=False, truncation=False).input_ids
+    message_ids = decoder_tok(
+        message, add_special_tokens=False, padding=False, truncation=False
+    ).input_ids
 
-    msg_input_ids, target, prefix = data_collator._process_msg_gen(message_ids=message_ids, context_len=2)
+    msg_input_ids, target, prefix = data_collator._process_msg_gen(
+        message_ids=message_ids, context_len=2
+    )
     assert msg_input_ids == []
     assert target == "mple message example"
     assert prefix == "Si"
 
-    msg_input_ids, target, prefix = data_collator._process_msg_gen(message_ids=message_ids, context_len=6)
+    msg_input_ids, target, prefix = data_collator._process_msg_gen(
+        message_ids=message_ids, context_len=6
+    )
     assert msg_input_ids == []
     assert target == " message example"
     assert prefix == "Simple"
 
-    msg_input_ids, target, prefix = data_collator._process_msg_gen(message_ids=message_ids, context_len=7)
-    assert msg_input_ids == decoder_tok("Simple ", add_special_tokens=False, padding=False, truncation=False).input_ids
+    msg_input_ids, target, prefix = data_collator._process_msg_gen(
+        message_ids=message_ids, context_len=7
+    )
+    assert (
+        msg_input_ids
+        == decoder_tok(
+            "Simple ", add_special_tokens=False, padding=False, truncation=False
+        ).input_ids
+    )
     assert target == "message example"
     assert prefix == ""
 
-    msg_input_ids, target, prefix = data_collator._process_msg_gen(message_ids=message_ids, context_len=9)
-    assert msg_input_ids == decoder_tok("Simple", add_special_tokens=False, padding=False, truncation=False).input_ids
+    msg_input_ids, target, prefix = data_collator._process_msg_gen(
+        message_ids=message_ids, context_len=9
+    )
+    assert (
+        msg_input_ids
+        == decoder_tok(
+            "Simple", add_special_tokens=False, padding=False, truncation=False
+        ).input_ids
+    )
     assert target == "ssage example"
     assert prefix == " me"
 
     message = "chore(deps): update version to v1.0.0-SNAPSHOT"
-    message_ids = decoder_tok(message, add_special_tokens=False, padding=False, truncation=False).input_ids
+    message_ids = decoder_tok(
+        message, add_special_tokens=False, padding=False, truncation=False
+    ).input_ids
 
-    msg_input_ids, target, prefix = data_collator._process_msg_gen(message_ids=message_ids, context_len=8)
+    msg_input_ids, target, prefix = data_collator._process_msg_gen(
+        message_ids=message_ids, context_len=8
+    )
     assert msg_input_ids == []
     assert target == "ps): update version to v1.0.0-SNAPSHOT"
     assert prefix == "chore(de"
 
-    msg_input_ids, target, prefix = data_collator._process_msg_gen(message_ids=message_ids, context_len=12)
+    msg_input_ids, target, prefix = data_collator._process_msg_gen(
+        message_ids=message_ids, context_len=12
+    )
     assert msg_input_ids == []
     assert target == " update version to v1.0.0-SNAPSHOT"
     assert prefix == "chore(deps):"
 
-    msg_input_ids, target, prefix = data_collator._process_msg_gen(message_ids=message_ids, context_len=34)
+    msg_input_ids, target, prefix = data_collator._process_msg_gen(
+        message_ids=message_ids, context_len=34
+    )
     assert (
         msg_input_ids
         == decoder_tok(
-            "chore(deps): update version to", add_special_tokens=False, padding=False, truncation=False
+            "chore(deps): update version to",
+            add_special_tokens=False,
+            padding=False,
+            truncation=False,
         ).input_ids
     )
     assert target == "0.0-SNAPSHOT"

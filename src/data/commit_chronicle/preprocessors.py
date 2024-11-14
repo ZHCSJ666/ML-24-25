@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 import polars as pl
-from datasets import load_dataset, load_from_disk, Dataset
+from datasets import Dataset, load_dataset, load_from_disk
 from datasets.formatting.formatting import LazyRow
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerFast
@@ -64,8 +64,7 @@ class CommitChroniclePreprocessor:
         split: str,
         use_cache: bool,
     ) -> Path:
-        """
-        Main processing logic.
+        """Main processing logic.
 
         1. Iterate over input file in chunks, process and tokenize messages and diffs, save to separate file.
         2. Aggregate history from processed file, save to separate file.
@@ -86,9 +85,7 @@ class CommitChroniclePreprocessor:
             logging.info(f"{processed_path} found, won't rewrite")
         else:
             (
-                load_dataset(
-                    "JetBrains-Research/commit-chronicle", "default", split=split
-                )
+                load_dataset("JetBrains-Research/commit-chronicle", "default", split=split)
                 .filter(
                     lambda example: example["language"] in self.languages,
                     num_proc=self.cpu_count,
@@ -122,6 +119,7 @@ class CommitChroniclePreprocessor:
         return processed_history_path if self.add_history_to_inputs else processed_path
 
     def _process_example(self, example: LazyRow) -> Dict[str, Any]:
+        """Processes a single example."""
         message = self._preprocess_message(example["message"])
         mods = self._preprocess_mods(example["mods"])
         return {
@@ -140,8 +138,8 @@ class CommitChroniclePreprocessor:
         return diff
 
     def _preprocess_mods(self, mods: List[Dict[str, str]]) -> str:
-        """
-        Transforms a list of all files modifications made in a commit into a single string representation.
+        """Transforms a list of all files modifications made in a commit into a single string
+        representation.
 
         Specifically, adds a header to each file diff (https://git-scm.com/docs/git-diff#_generating_patch_text_with_p)
         and concatenates the results.
@@ -165,9 +163,7 @@ class CommitChroniclePreprocessor:
             elif mod["change_type"] == "RENAME":
                 file_diff = f"rename from {mod['old_path']}{line_sep}rename to {mod['new_path']}"
             elif mod["change_type"] == "COPY":
-                file_diff = (
-                    f"copy from {mod['old_path']}{line_sep}copy to {mod['new_path']}"
-                )
+                file_diff = f"copy from {mod['old_path']}{line_sep}copy to {mod['new_path']}"
             else:
                 file_diff = f"{mod['new_path']}"
             diff += file_diff + line_sep + self._preprocess_diff(mod["diff"])
@@ -181,8 +177,8 @@ class CommitChroniclePreprocessor:
     def _tokenize_diffs(self, diffs: List[str]) -> List[List[int]]:
         """Tokenizes diffs via transformers' tokenizer.
 
-        Diffs are truncated to save memory. Special tokens are added later, during batch construction, so 2 extra tokens
-        from max_length are reserved for BOS and EOS.
+        Diffs are truncated to save memory. Special tokens are added later, during batch
+        construction, so 2 extra tokens from max_length are reserved for BOS and EOS.
         """
         tokenized_input = self._diff_tokenizer(
             diffs,
@@ -195,13 +191,13 @@ class CommitChroniclePreprocessor:
         return tokenized_input
 
     def _tokenize_messages(self, messages: List[str]) -> List[List[int]]:
+        """Tokenizes commit messages via transformers' tokenizer.'."""
         return self._msg_tokenizer(
             messages, truncation=False, padding=False, add_special_tokens=False  # type: ignore[operator]
         ).input_ids
 
     def _process_history(self, input_path: Path, output_path: Path) -> None:
-        """
-        Aggregates commit message history for each author in a given file.
+        """Aggregates commit message history for each author in a given file.
 
         Input file should be in JSONL format and contain keys "author" and "msg_input_ids".
         Also, messages from each author are expected to be in chronological order
@@ -236,7 +232,8 @@ class CommitChroniclePreprocessor:
         output_path: Path,
         decoder_context_max_length: int,
     ) -> None:
-        """Adds commit message history to each example in the input file and saves the results to the output file.
+        """Adds commit message history to each example in the input file and saves the results to
+        the output file.
 
         This approach uses more disk space but enables working with the dataset in a fully iterable fashion
         without loading the history into RAM. To prevent excessive disk usage, the messages from history are added only
@@ -254,9 +251,7 @@ class CommitChroniclePreprocessor:
                 : row["pos_in_history"]
             ]
             relevant_author_history: List[List[int]] = []
-            cur_len = (
-                len(row["msg_input_ids"]) + 2
-            )  # +2 to account for BOS and EOS tokens
+            cur_len = len(row["msg_input_ids"]) + 2  # +2 to account for BOS and EOS tokens
             for history_msg in all_author_history[::-1]:
                 if cur_len + len(history_msg) + 1 > decoder_context_max_length:
                     break
@@ -266,8 +261,7 @@ class CommitChroniclePreprocessor:
             return row
 
         history = {
-            int(entry["author"]): entry["msg_input_ids"]
-            for entry in load_from_disk(history_path)
+            int(entry["author"]): entry["msg_input_ids"] for entry in load_from_disk(history_path)
         }
 
         (
@@ -277,8 +271,8 @@ class CommitChroniclePreprocessor:
         )
 
     def _get_pos_in_history(self, authors: List[int]) -> List[int]:
-        """Builds correct position in history for each commit when iterating over input data
-        in chunks.
+        """Builds correct position in history for each commit when iterating over input data in
+        chunks.
 
         Args:
             authors: A list of authors for commits from the current chunk.

@@ -125,11 +125,13 @@ repos:
           - --skip=logs/**,data/**,*.ipynb
           # - --ignore-words-list=abc,def
 
-  # jupyter notebook cell output clearing
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.6.1
+  # jupyter prepare html reports and clear output
+  - repo: https://github.com/arashabzd/pre-commit-nbconvert
+    rev: "0.0.4"
     hooks:
-      - id: nbstripout
+      - id: convert-notebooks
+        args: [--format=markdown, --output-dir=reports] # , --no-code
+      - id: clear-notebook-outputs
 
   # jupyter notebook linting
   - repo: https://github.com/nbQA-dev/nbQA

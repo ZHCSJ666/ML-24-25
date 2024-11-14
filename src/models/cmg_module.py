@@ -1,9 +1,9 @@
-from typing import Any, Dict, Callable
+from typing import Any, Callable, Dict
 
 import torch
 import torch.nn as nn
 from lightning import LightningModule
-from transformers import PreTrainedTokenizerBase, AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from src.data.types import Batch, BatchTest, BatchTrain
 
@@ -38,9 +38,7 @@ class CommitMessageGenerationModule(LightningModule):
         # this line allows to access init params with 'self.hparams' attribute
         # also ensures init params will be stored in ckpt
         self.save_hyperparameters(logger=False)
-        self.criterion = nn.CrossEntropyLoss(
-            ignore_index=-100
-        )  # Updated to ignore padding tokens
+        self.criterion = nn.CrossEntropyLoss(ignore_index=-100)  # Updated to ignore padding tokens
 
         self.net = net
 
@@ -86,9 +84,7 @@ class CommitMessageGenerationModule(LightningModule):
         """
         result = self.model_step(batch, "train")
         loss = result["loss"]
-        self.log(
-            "train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True
-        )
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return {"loss": loss}
 
     def test_step(self, batch: BatchTest, batch_idx: int) -> None:
@@ -99,9 +95,7 @@ class CommitMessageGenerationModule(LightningModule):
         """
         result = self.model_step(batch, "test")
         loss = result["loss"]
-        self.log(
-            "test_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True
-        )
+        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
@@ -115,16 +109,11 @@ class CommitMessageGenerationModule(LightningModule):
         """
         result = self.model_step(batch, "val")
         loss = result["loss"]
-        self.log(
-            "val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True
-        )
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""
         pass
-
-    def test_step(self, batch: BatchTest, batch_idx: int) -> None:
-        self.model_step(batch, "test")
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
