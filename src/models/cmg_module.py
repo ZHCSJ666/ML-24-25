@@ -1,12 +1,12 @@
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 import torch
-from lightning import LightningModule
 import torch.nn as nn
-from data.components.tokenization import load_tokenizers
-from data.types import Batch, BatchTest, BatchTrain
-from transformers import PreTrainedTokenizerBase, AutoTokenizer
-from torchmetrics import BLEUScore
+from lightning import LightningModule
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
+
+from src.data.types import Batch, BatchTest, BatchTrain
+
 
 class CommitMessageGenerationModule(LightningModule):
     """Git commit message generation module.
@@ -18,12 +18,13 @@ class CommitMessageGenerationModule(LightningModule):
     def __init__(
         self,
         model_name: str,
-        net: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.lr_scheduler,
+        net: nn.Module,
+        optimizer: Callable[..., torch.optim.Optimizer],
+        scheduler: Callable[..., torch.optim.lr_scheduler],
         compile: bool,
-        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained("Salesforce/codet5-base")
-        
+        tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(
+            "Salesforce/codet5-base"
+        ),
     ) -> None:
         """Initialize a `EncoderDecoderLitModule`.
 
@@ -85,7 +86,7 @@ class CommitMessageGenerationModule(LightningModule):
         loss = result["loss"]
         self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return {"loss": loss}
-    
+
     def test_step(self, batch: BatchTest, batch_idx: int) -> None:
         """Test step.
 
@@ -113,9 +114,6 @@ class CommitMessageGenerationModule(LightningModule):
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""
         pass
-
-    def test_step(self, batch: BatchTest, batch_idx: int) -> None:
-        self.model_step(batch, "test")
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""

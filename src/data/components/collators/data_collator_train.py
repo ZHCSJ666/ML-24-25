@@ -5,14 +5,14 @@ from typing import List, Optional, Tuple
 
 import torch
 
-
+from ...types import BatchTrain, SingleExample
 from .base_collator_utils import BaseCollatorUtils
-from ...types import SingleExample, BatchTrain
 
 
 @dataclass
 class DataCollatorTrain(BaseCollatorUtils):
-    """This class is used to construct batches out of lists of examples in training/validation setting.
+    """This class is used to construct batches out of lists of examples in training/validation
+    setting.
 
     There is an option to add message history to decoder context
     (but if history is used as encoder input, it will be ignored).
@@ -32,13 +32,13 @@ class DataCollatorTrain(BaseCollatorUtils):
     def _shift_for_encoder_decoder(
         self, ids: List[List[int]], labels: List[List[int]]
     ) -> Tuple[List[List[int]], List[List[int]]]:
-        """This method mimics transformers logic of ids and labels for EncoderDecoderModel
-        (or T5ForConditionalGeneration).
+        """This method mimics transformers logic of ids and labels for EncoderDecoderModel (or
+        T5ForConditionalGeneration).
 
-        Starting from transformers v4.12, loss is now calculated in EncoderDecoderModel, not in decoder class.
-        Also, decoder input ids are created automatically based on labels: labels are shifted and -100 is replaced
-        with pad token. In our case, history ids are masked -100 in labels, but they are still
-        meaningful ids. Therefore, we can't use the default approach.
+        Starting from transformers v4.12, loss is now calculated in EncoderDecoderModel, not in
+        decoder class. Also, decoder input ids are created automatically based on labels: labels
+        are shifted and -100 is replaced with pad token. In our case, history ids are masked -100
+        in labels, but they are still meaningful ids. Therefore, we can't use the default approach.
         """
         if self.decoder_start_token_id is None:
             ids = [[self.msg_bos_token_id]] + ids[:-1]
@@ -49,8 +49,8 @@ class DataCollatorTrain(BaseCollatorUtils):
     def _process_decoder_input(
         self, examples: List[SingleExample]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Prepares decoder input for train/validation:
+        """Prepares decoder input for train/validation:
+
           * aggregates messages from history when configured accordingly
           * concatenates history with current message
           * constructs labels
@@ -62,12 +62,8 @@ class DataCollatorTrain(BaseCollatorUtils):
         Returns:
             Tuple of three tensors: input ids, attention masks, labels.
         """
-        message_inputs: List[List[int]] = [
-            example.msg_input_ids for example in examples
-        ]
-        history_inputs: List[List[List[int]]] = [
-            example.history_input_ids for example in examples
-        ]
+        message_inputs: List[List[int]] = [example.msg_input_ids for example in examples]
+        history_inputs: List[List[List[int]]] = [example.history_input_ids for example in examples]
 
         all_msg_ids: List[torch.Tensor] = []
         all_msg_masks: List[torch.Tensor] = []
@@ -84,9 +80,7 @@ class DataCollatorTrain(BaseCollatorUtils):
                     cur_len=len(message_ids) + 2,
                     history_ids=history_ids,
                 )
-                cur_history_labels = [
-                    [-100 for _ in message] for message in cur_history_ids
-                ]
+                cur_history_labels = [[-100 for _ in message] for message in cur_history_ids]
 
             cur_ids = (
                 [[self.msg_bos_token_id]]
@@ -102,9 +96,7 @@ class DataCollatorTrain(BaseCollatorUtils):
             )
 
             if self.shift_labels:
-                cur_ids, cur_labels = self._shift_for_encoder_decoder(
-                    cur_ids, cur_labels
-                )
+                cur_ids, cur_labels = self._shift_for_encoder_decoder(cur_ids, cur_labels)
 
             cur_ids_tensor = torch.tensor(
                 [ex for sublist in cur_ids for ex in sublist], dtype=torch.int64
@@ -154,6 +146,7 @@ class DataCollatorTrain(BaseCollatorUtils):
         )
 
     def __call__(self, examples: List[SingleExample]) -> BatchTrain:
+        """Processes a list of examples into a BatchTrain object."""
         if not self.testing:
             (
                 (encoder_input_ids, encoder_attention_mask),
@@ -161,12 +154,11 @@ class DataCollatorTrain(BaseCollatorUtils):
                 (retrieved_msg_input_ids, retrieved_msg_attention_mask),
             ) = self._process_encoder_input(examples=examples)
 
-            decoder_input_ids, decoder_attention_mask, labels = (
-                self._process_decoder_input(examples=examples)
+            decoder_input_ids, decoder_attention_mask, labels = self._process_decoder_input(
+                examples=examples
             )
 
             return BatchTrain(
-                
                 encoder_input_ids=encoder_input_ids,
                 encoder_attention_mask=encoder_attention_mask,
                 decoder_input_ids=decoder_input_ids,

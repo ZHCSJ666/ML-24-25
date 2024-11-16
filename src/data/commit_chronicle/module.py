@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Optional, List, Literal
+from typing import Any, List, Literal, Optional
 
 import datasets
 import torch
@@ -8,10 +8,10 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoConfig
 
-from data.components.collators import DataCollatorTrain, DataCollatorTest
-from data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
-from data.components.tokenization import load_tokenizers
-from data.types import SingleExample
+from src.data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
+from src.data.components.collators import DataCollatorTest, DataCollatorTrain
+from src.data.components.tokenization import load_tokenizers
+from src.data.types import SingleExample
 
 
 class CommitChronicleDataModule(LightningDataModule):
@@ -128,9 +128,7 @@ class CommitChronicleDataModule(LightningDataModule):
                 raise RuntimeError(
                     f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
                 )
-            self.batch_size_per_device = (
-                self.hparams.batch_size // self.trainer.world_size
-            )
+            self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
 
         def create_dataset(split):
             path = self.processor.processed_path_for(Path(self.hparams.data_dir), split)
@@ -185,6 +183,7 @@ class CommitChronicleDataModule(LightningDataModule):
             )
 
     def train_dataloader(self) -> DataLoader[Any]:
+        """Create and return the train dataloader."""
         return DataLoader(
             dataset=self.data_train,
             batch_size=self.batch_size_per_device,
@@ -195,6 +194,7 @@ class CommitChronicleDataModule(LightningDataModule):
         )
 
     def val_dataloader(self) -> DataLoader[Any]:
+        """Create and return the validation dataloader."""
         return DataLoader(
             dataset=self.data_val,
             batch_size=self.batch_size_per_device,
@@ -205,6 +205,7 @@ class CommitChronicleDataModule(LightningDataModule):
         )
 
     def test_dataloader(self) -> DataLoader[Any]:
+        """Create and return the test dataloader."""
         return DataLoader(
             dataset=self.data_test,
             batch_size=self.batch_size_per_device,
@@ -228,13 +229,17 @@ def get_decoder_start_token_id(model_cfg: str) -> Optional[int]:
 
 
 class CommitChronicleDataset(torch.utils.data.Dataset):
+    """Simple wrapper dataset around a datasets.Dataset object."""
+
     def __init__(self, dataset: datasets.Dataset) -> None:
         self.dataset = dataset
 
     def __len__(self) -> int:
+        """Return the number of samples in the dataset."""
         return len(self.dataset)
 
     def __getitem__(self, index: int) -> SingleExample:
+        """Gets a single example from the dataset."""
         row = self.dataset[index]
         return SingleExample(
             diff_input_ids=row["diff_input_ids"],

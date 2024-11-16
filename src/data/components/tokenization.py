@@ -1,9 +1,9 @@
+import logging
 from copy import deepcopy
 from typing import Optional, Tuple
 
 import hydra
-from transformers import PreTrainedTokenizerFast, AutoTokenizer
-import logging
+from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
 
 def load_tokenizers(
@@ -22,9 +22,7 @@ def load_tokenizers(
     msg_tokenizer = add_special_tokens(msg_tokenizer, configuration)
 
     if not diff_tokenizer_name_or_path:
-        logging.warning(
-            "Diff tokenizer is not set, using message tokenizer as a default"
-        )
+        logging.warning("Diff tokenizer is not set, using message tokenizer as a default")
         diff_tokenizer = deepcopy(msg_tokenizer)
     elif diff_tokenizer_name_or_path == msg_tokenizer_name_or_path:
         diff_tokenizer = deepcopy(msg_tokenizer)

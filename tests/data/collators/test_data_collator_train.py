@@ -38,7 +38,11 @@ def test_shift_encoder_decoder(default_tokenizers):
         testing=None,
         process_retrieved=False,
     )
-    labels = [[decoder_tok.bos_token_id]] + [decoder_tok("some example").input_ids] + [[decoder_tok.eos_token_id]]
+    labels = (
+        [[decoder_tok.bos_token_id]]
+        + [decoder_tok("some example").input_ids]
+        + [[decoder_tok.eos_token_id]]
+    )
     ids_, labels_ = data_collator._shift_for_encoder_decoder(ids=labels, labels=labels)
     transformer_ids = shift_tokens_right(
         torch.tensor([[ex for sublist in labels for ex in sublist]], dtype=torch.int64),
@@ -72,7 +76,11 @@ def test_shift_t5(default_tokenizers):
         process_retrieved=False,
         decoder_start_token_id=t5_config.decoder_start_token_id,
     )
-    labels = [[decoder_tok.bos_token_id]] + [decoder_tok("some example").input_ids] + [[decoder_tok.eos_token_id]]
+    labels = (
+        [[decoder_tok.bos_token_id]]
+        + [decoder_tok("some example").input_ids]
+        + [[decoder_tok.eos_token_id]]
+    )
     ids_, labels_ = data_collator._shift_for_encoder_decoder(ids=labels, labels=labels)
 
     t5_model = T5ForConditionalGeneration.from_pretrained("t5-small")
@@ -88,8 +96,18 @@ def test_decoder_input_without_history_no_shift(default_tokenizers):
     encoder_tok, decoder_tok = default_tokenizers
 
     inputs = [
-        SingleExample(diff_input_ids=[], msg_input_ids=[i for i in range(128)], history_input_ids=[], pos_in_file=0),
-        SingleExample(diff_input_ids=[], msg_input_ids=[i for i in range(3)], history_input_ids=[], pos_in_file=1),
+        SingleExample(
+            diff_input_ids=[],
+            msg_input_ids=[i for i in range(128)],
+            history_input_ids=[],
+            pos_in_file=0,
+        ),
+        SingleExample(
+            diff_input_ids=[],
+            msg_input_ids=[i for i in range(3)],
+            history_input_ids=[],
+            pos_in_file=1,
+        ),
     ]
     for encoder_input_type in ["diff", "history"]:
         no_shift_data_collator = DataCollatorTrain(
@@ -110,12 +128,18 @@ def test_decoder_input_without_history_no_shift(default_tokenizers):
             testing=None,
             process_retrieved=False,
         )
-        decoder_input_ids, decoder_attention_mask, labels = no_shift_data_collator._process_decoder_input(inputs)
+        (
+            decoder_input_ids,
+            decoder_attention_mask,
+            labels,
+        ) = no_shift_data_collator._process_decoder_input(inputs)
 
         assert decoder_input_ids.shape == (2, 130)
         assert torch.all(
             decoder_input_ids[0]
-            == torch.tensor([decoder_tok.bos_token_id] + [i for i in range(128)] + [decoder_tok.eos_token_id])
+            == torch.tensor(
+                [decoder_tok.bos_token_id] + [i for i in range(128)] + [decoder_tok.eos_token_id]
+            )
         )
         assert torch.all(
             decoder_input_ids[1]
@@ -129,12 +153,16 @@ def test_decoder_input_without_history_no_shift(default_tokenizers):
         assert decoder_attention_mask.shape == (2, 130)
         assert torch.all(decoder_attention_mask[0] == torch.tensor([1 for _ in range(128 + 2)]))
         assert torch.all(
-            decoder_attention_mask[1] == torch.tensor([1 for _ in range(3 + 2)] + [0 for _ in range(128 - 3)])
+            decoder_attention_mask[1]
+            == torch.tensor([1 for _ in range(3 + 2)] + [0 for _ in range(128 - 3)])
         )
 
         assert labels.shape == (2, 130)
         assert torch.all(
-            labels[0] == torch.tensor([decoder_tok.bos_token_id] + [i for i in range(128)] + [decoder_tok.eos_token_id])
+            labels[0]
+            == torch.tensor(
+                [decoder_tok.bos_token_id] + [i for i in range(128)] + [decoder_tok.eos_token_id]
+            )
         )
         assert torch.all(
             labels[1]
@@ -151,8 +179,18 @@ def test_decoder_input_without_history_shift(default_tokenizers):
     encoder_tok, decoder_tok = default_tokenizers
 
     inputs = [
-        SingleExample(diff_input_ids=[], msg_input_ids=[i for i in range(128)], history_input_ids=[], pos_in_file=0),
-        SingleExample(diff_input_ids=[], msg_input_ids=[i for i in range(3)], history_input_ids=[], pos_in_file=1),
+        SingleExample(
+            diff_input_ids=[],
+            msg_input_ids=[i for i in range(128)],
+            history_input_ids=[],
+            pos_in_file=0,
+        ),
+        SingleExample(
+            diff_input_ids=[],
+            msg_input_ids=[i for i in range(3)],
+            history_input_ids=[],
+            pos_in_file=1,
+        ),
     ]
 
     for encoder_input_type in ["diff", "history"]:
@@ -174,7 +212,11 @@ def test_decoder_input_without_history_shift(default_tokenizers):
             testing=None,
             process_retrieved=False,
         )
-        decoder_input_ids, decoder_attention_mask, labels = no_shift_data_collator._process_decoder_input(inputs)
+        (
+            decoder_input_ids,
+            decoder_attention_mask,
+            labels,
+        ) = no_shift_data_collator._process_decoder_input(inputs)
 
         shift_data_collator = DataCollatorTrain(
             diff_bos_token_id=encoder_tok.bos_token_id,
@@ -206,7 +248,9 @@ def test_decoder_input_without_history_shift(default_tokenizers):
         assert shift_labels.shape == (2, 130)
         assert torch.all(
             shift_labels[0]
-            == torch.tensor([decoder_tok.bos_token_id] + [i for i in range(128)] + [decoder_tok.eos_token_id])
+            == torch.tensor(
+                [decoder_tok.bos_token_id] + [i for i in range(128)] + [decoder_tok.eos_token_id]
+            )
         )
         assert torch.all(
             shift_labels[1]
@@ -229,7 +273,12 @@ def test_decoder_input_with_history_no_shift(default_tokenizers):
             history_input_ids=[[i] for i in range(256, 512)],
             pos_in_file=0,
         ),
-        SingleExample(diff_input_ids=[], msg_input_ids=[i for i in range(5, 255)], history_input_ids=[], pos_in_file=1),
+        SingleExample(
+            diff_input_ids=[],
+            msg_input_ids=[i for i in range(5, 255)],
+            history_input_ids=[],
+            pos_in_file=1,
+        ),
     ]
 
     data_collator = DataCollatorTrain(
@@ -248,7 +297,9 @@ def test_decoder_input_with_history_no_shift(default_tokenizers):
         testing=None,
         process_retrieved=False,
     )
-    decoder_input_ids, decoder_attention_mask, labels = data_collator._process_decoder_input(inputs)
+    decoder_input_ids, decoder_attention_mask, labels = data_collator._process_decoder_input(
+        inputs
+    )
 
     assert decoder_input_ids.shape == (2, 256)
     assert torch.all(
@@ -271,7 +322,10 @@ def test_decoder_input_with_history_no_shift(default_tokenizers):
     )
     assert decoder_attention_mask.shape == (2, 256)
     assert torch.all(decoder_attention_mask[0] == torch.tensor([1 for _ in range(256)]))
-    assert torch.all(decoder_attention_mask[1] == torch.tensor([1 for _ in range(256 - 4)] + [0 for _ in range(4)]))
+    assert torch.all(
+        decoder_attention_mask[1]
+        == torch.tensor([1 for _ in range(256 - 4)] + [0 for _ in range(4)])
+    )
 
     assert labels.shape == (2, 256)
     assert torch.all(
@@ -304,7 +358,12 @@ def test_decoder_input_with_history_shift(default_tokenizers):
             history_input_ids=[[i] for i in range(256, 512)],
             pos_in_file=0,
         ),
-        SingleExample(diff_input_ids=[], msg_input_ids=[i for i in range(5, 255)], history_input_ids=[], pos_in_file=1),
+        SingleExample(
+            diff_input_ids=[],
+            msg_input_ids=[i for i in range(5, 255)],
+            history_input_ids=[],
+            pos_in_file=1,
+        ),
     ]
 
     no_shift_data_collator = DataCollatorTrain(
@@ -323,7 +382,11 @@ def test_decoder_input_with_history_shift(default_tokenizers):
         testing=None,
         process_retrieved=False,
     )
-    decoder_input_ids, decoder_attention_mask, labels = no_shift_data_collator._process_decoder_input(inputs)
+    (
+        decoder_input_ids,
+        decoder_attention_mask,
+        labels,
+    ) = no_shift_data_collator._process_decoder_input(inputs)
 
     shift_data_collator = DataCollatorTrain(
         diff_bos_token_id=encoder_tok.bos_token_id,
@@ -341,9 +404,11 @@ def test_decoder_input_with_history_shift(default_tokenizers):
         testing=None,
         process_retrieved=False,
     )
-    shift_decoder_input_ids, shift_decoder_attention_mask, shift_labels = shift_data_collator._process_decoder_input(
-        inputs
-    )
+    (
+        shift_decoder_input_ids,
+        shift_decoder_attention_mask,
+        shift_labels,
+    ) = shift_data_collator._process_decoder_input(inputs)
 
     assert torch.all(decoder_input_ids[:, :-1] == shift_decoder_input_ids[:, 1:])
     assert torch.all(decoder_attention_mask == shift_decoder_attention_mask)

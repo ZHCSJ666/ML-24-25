@@ -17,7 +17,6 @@ This project aims to use machine learning and natural language processing techni
 
 ## Installation
 
-
 #### Conda
 
 ```bash
@@ -30,6 +29,13 @@ conda env create -f environment.yaml
 
 # activate conda environment
 conda activate cmg
+```
+
+If for some reason, imports are not working well for you, you can install the project as a package.
+
+```bash
+# run command from project root directory
+pip install -e . --config-settings editable_mode=compat
 ```
 
 ## How to run

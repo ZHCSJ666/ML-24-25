@@ -6,12 +6,13 @@ from typing import List, Literal, Optional, Tuple
 
 import torch
 
-from data.types import SingleExample
+from src.data.types import SingleExample
 
 
 @dataclass
 class BaseCollatorUtils:
-    """Base class for utilities both for training and evaluation collators (e.g. processing encoder input).
+    """Base class for utilities both for training and evaluation collators (e.g. processing encoder
+    input).
 
     Attributes:
         msg_*_token_id: Corresponding special token for message tokenizer.
@@ -50,11 +51,8 @@ class BaseCollatorUtils:
             value=value,
         )
 
-    def _get_history(
-        self, cur_len: int, history_ids: List[List[int]]
-    ) -> List[List[int]]:
-        """
-        A helper method to use history in decoder's context.
+    def _get_history(self, cur_len: int, history_ids: List[List[int]]) -> List[List[int]]:
+        """A helper method to use history in decoder's context.
 
         It iterates over history starting from the most recent message and adds messages until total length exceeds
         decoder context length.
@@ -79,8 +77,7 @@ class BaseCollatorUtils:
     def _process_history(
         self, history_inputs: List[List[List[int]]]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        This helper method processes history as encoder input.
+        """This helper method processes history as encoder input.
 
         It iterates over history starting from the most recent message and adds messages until total length exceeds
         encoder context length.
@@ -109,9 +106,7 @@ class BaseCollatorUtils:
                 cur_history_ids.append(history_ids + [self.msg_sep_token_id])
 
             cur_history_ids = (
-                [[self.msg_bos_token_id]]
-                + cur_history_ids[::-1]
-                + [[self.msg_eos_token_id]]
+                [[self.msg_bos_token_id]] + cur_history_ids[::-1] + [[self.msg_eos_token_id]]
             )
             # drop last [SEP] token
             cur_history_ids[-2] = cur_history_ids[-2][:-1]
@@ -137,16 +132,13 @@ class BaseCollatorUtils:
             for tensor in all_history_ids
         ]
         all_history_masks = [
-            self._pad_tensor(
-                tensor, pad_len=history_max_len - tensor.numel(), value=0, left=False
-            )
+            self._pad_tensor(tensor, pad_len=history_max_len - tensor.numel(), value=0, left=False)
             for tensor in all_history_masks
         ]
         return torch.stack(all_history_ids), torch.stack(all_history_masks)
 
     def _process_inputs(self, inputs: List[List[int]], are_messages: bool = False):
-        """
-        This helper method processes either diffs or messages as encoder input.
+        """This helper method processes either diffs or messages as encoder input.
 
         It truncates the inputs to the maximum allowed length.
 
@@ -170,9 +162,7 @@ class BaseCollatorUtils:
             pad_token_id = self.diff_pad_token_id
 
         inputs = [
-            [bos_token_id]
-            + example[: self.encoder_context_max_len - 2]
-            + [eos_token_id]
+            [bos_token_id] + example[: self.encoder_context_max_len - 2] + [eos_token_id]
             for example in inputs
         ]
         inputs_tensors = [torch.tensor(ids, dtype=torch.int64) for ids in inputs]
@@ -200,13 +190,14 @@ class BaseCollatorUtils:
         ]
         return torch.stack(inputs_tensors), torch.stack(masks_tensors)
 
-    def _process_encoder_input(self, examples: List[SingleExample]) -> Tuple[
+    def _process_encoder_input(
+        self, examples: List[SingleExample]
+    ) -> Tuple[
         Tuple[torch.Tensor, torch.Tensor],
         Tuple[Optional[torch.Tensor], Optional[torch.Tensor]],
         Tuple[Optional[torch.Tensor], Optional[torch.Tensor]],
     ]:
-        """
-        A helper method to process encoder input.
+        """A helper method to process encoder input.
 
         Either diff or history can be passed to encoder.
 
@@ -217,9 +208,7 @@ class BaseCollatorUtils:
             input_ids for encoder, attention_mask for encoder
         """
         if self.encoder_input_type == "diff":
-            diff_inputs: List[List[int]] = [
-                example.diff_input_ids for example in examples
-            ]
+            diff_inputs: List[List[int]] = [example.diff_input_ids for example in examples]
             results = self._process_inputs(diff_inputs)
         elif self.encoder_input_type == "history":
             history_inputs: List[List[List[int]]] = [
