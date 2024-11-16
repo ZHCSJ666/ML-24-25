@@ -1,5 +1,5 @@
 _target_: src.models.cmg_module.CommitMessageGenerationModule
-
+model_name: "flan-t5-small"
 optimizer:
   _target_: torch.optim.Adam
   _partial_: true

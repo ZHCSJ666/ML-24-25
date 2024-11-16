@@ -21,6 +21,7 @@ class CommitChroniclePreprocessor:
         diff_line_sep: str = "\n",
         diff_max_len: int = 512,
         languages: Sequence[str] = ("Go",),
+        change_types: Sequence[str] = ("ADD"),
         add_history_to_inputs: bool = False,
         decoder_context_max_length: Optional[int] = None,
         cpu_count: Optional[int] = None,
@@ -52,6 +53,7 @@ class CommitChroniclePreprocessor:
         self.cpu_count = cpu_count or mp.cpu_count()
         self.add_history_to_inputs = add_history_to_inputs
         self.decoder_context_max_length = decoder_context_max_length
+        self.change_types = change_types
 
     def processed_path_for(self, data_dir: Path, split: str) -> Path:
         processed_path = data_dir / "processed" / split
@@ -88,6 +90,9 @@ class CommitChroniclePreprocessor:
                 load_dataset("JetBrains-Research/commit-chronicle", "default", split=split)
                 .filter(
                     lambda example: example["language"] in self.languages,
+                    num_proc=self.cpu_count,
+                ).filter(
+                    lambda example: all(mod["change_type"] in self.change_types for mod in example["mods"]),
                     num_proc=self.cpu_count,
                 )
                 .map(self._process_example, num_proc=self.cpu_count)
@@ -152,7 +157,6 @@ class CommitChroniclePreprocessor:
         """
         line_sep = self.diff_line_sep
         diff = ""
-
         for mod in mods:
             if mod["change_type"] == "UNKNOWN":
                 continue
@@ -167,6 +171,7 @@ class CommitChroniclePreprocessor:
             else:
                 file_diff = f"{mod['new_path']}"
             diff += file_diff + line_sep + self._preprocess_diff(mod["diff"])
+
 
         return diff
 

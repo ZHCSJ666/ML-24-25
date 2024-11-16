@@ -7,6 +7,8 @@ from datasets import load_from_disk
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoConfig
+import rootutils
+rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 from src.data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
 from src.data.components.collators import DataCollatorTest, DataCollatorTrain
@@ -29,9 +31,10 @@ class CommitChronicleDataModule(LightningDataModule):
         self,
         data_dir: str = "data/datasets/commit-chronicle",
         languages: List[str] = ["Go"],
+        change_types: List[str] = ["ADD"],
         diff_tokenizer_name_or_path: str = "Salesforce/codet5-base",
         msg_tokenizer_name_or_path: str = "Salesforce/codet5-base",
-        model_configuration: str = "encoder",
+        model_configuration: str = "encoder_decoder",
         encoder_context_max_len: int = 512,
         decoder_context_max_len: int = 512,
         shift_labels: bool = True,
@@ -83,6 +86,7 @@ class CommitChronicleDataModule(LightningDataModule):
             diff_tokenizer=self.diff_tokenizer,
             msg_tokenizer=self.msg_tokenizer,
             diff_line_sep=line_sep,
+            change_types=change_types,
             diff_max_len=encoder_context_max_len,
             add_history_to_inputs=add_history_to_inputs,
             decoder_context_max_length=decoder_context_max_len,
@@ -94,7 +98,6 @@ class CommitChronicleDataModule(LightningDataModule):
 
         self.train_val_collator = None
         self.test_collator = None
-
         self.batch_size_per_device = batch_size
 
     def prepare_data(self) -> None:
