@@ -1,6 +1,7 @@
 _target_: src.data.commit_chronicle.CommitChronicleDataModule
 data_dir: ${paths.data_dir}commit-chronicle
 languages: ["Go"]
+change_types: ["ADD"]
 
 diff_tokenizer_name_or_path: Salesforce/codet5-base
 msg_tokenizer_name_or_path: Salesforce/codet5-base
