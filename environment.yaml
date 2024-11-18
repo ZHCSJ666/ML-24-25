@@ -7,7 +7,7 @@ channels:
   - defaults
 dependencies:
   - python=3.11
-  - pytorch=2.3.1
+  - pytorch=2.3.0
   - torchvision=0.*
   - torchtext
   - lightning=2.*

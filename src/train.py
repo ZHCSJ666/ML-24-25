@@ -1,10 +1,9 @@
 from typing import Any, Dict, List, Optional, Tuple
 
-import hydra    
+import hydra
 import lightning as L
 import rootutils
-import torch
-from lightning import Callback, LightningDataModule, LightningModule, Trainer
+from lightning import Callback, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
 
@@ -59,13 +58,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: CommitChronicleDataModule = hydra.utils.instantiate(cfg.data)
     log.info(f"Instantiating model <{cfg.model._target_}>")
-
-    if cfg.model.model_name == "simple-transformer":
-        cfg.model.net.vocab_size = datamodule.vocab_size
-        # Initialize model with updated config
-        model = hydra.utils.instantiate(cfg.model)
-    else:
-        model: LightningModule = hydra.utils.instantiate(cfg.model)
+    model: LightningModule = hydra.utils.instantiate(cfg.model)
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
