@@ -18,22 +18,11 @@ class Seq2SeqWrapper(nn.Module):
     More specifically, this class relies on pretrained seq2seq models from HuggingFace Transformers.
 
     Args:
-        name_or_path: Name on HuggingFace hub or path to pretrained checkpoint.
-        tokenizer: Tokenizer for the checkpoint (it's initialized earlier to add special tokens when necessary).
-        diff_tokenizer: Tokenizer for source sequences (diffs)
-        msg_tokenizer: Tokenizer for target sequences (messages)
+        model: Tokenizer for target sequences (messages)
         encoder_context_max_len: Maximum allowed input sequence length for encoder, used for initializing from scratch.
         decoder_context_max_len: Maximum allowed input sequence length for decoder, used for initializing from scratch.
-        encoder_name_or_path: Optional – name or path to pretrained checkpoint to initialize encoder.
-        decoder_name_or_path: Optional – name or path to pretrained checkpoint to initialize decoder.
-        num_layers_encoder: If `encoder_name_or_path` is None, encoder will be initialized
-            from scratch with given number of layers; else, if given number of layers is less than number of layers in
-            pretrained checkpoint, they will be uniformly picked.
-        num_layers_decoder: If `decoder_name_or_path` is None, decoder will be initialized
-            from scratch with given number of layers; else, if given number of layers is less than number of layers in
-            pretrained checkpoint, they will be uniformly picked.
-        encoder_model_type: Optional – if encoder is initialized from scratch, this specific model class will be used.
-        decoder_model_type: Optional – if decoder is initialized from scratch, this specific model class will be used.
+        encoder: Optional – name or path to pretrained checkpoint to initialize encoder.
+        decoder: Optional – name or path to pretrained checkpoint to initialize decoder.
         tie_encoder_decoder: If set to `True`, encoder and decoder will share the same parameters
           (should be used with the same model classes and tokenizers).
         tie_word_embeddings: If set to `True`, encoder and decoder will share the same parameters for embedding layers
@@ -62,8 +51,8 @@ class Seq2SeqWrapper(nn.Module):
                 model.lm_head = nn.Linear(
                     in_features=model.lm_head.in_features, out_features=decoder_vocab_size
                 )
-            model.init_weights()
             self.model = model
+            model.apply(model._init_weights)
         else:
             encoder.resize_token_embeddings(decoder_vocab_size)
             decoder.resize_token_embeddings(decoder_vocab_size)
@@ -88,11 +77,24 @@ class Seq2SeqWrapper(nn.Module):
             labels=batch.labels,
         )
 
-    def generate(self, batch: Batch, max_length=64, **generation_kwargs) -> Any:
+    def generate(
+        self,
+        batch: Batch,
+        max_length=200,
+        num_beams=4,
+        early_stopping=True,
+        repetition_penalty=2.5,
+        length_penalty=1.0,
+        **generation_kwargs,
+    ) -> Any:
         return self.model.generate(
             input_ids=batch.encoder_input_ids,
             attention_mask=batch.encoder_attention_mask,
             max_length=max_length,
+            num_beams=num_beams,
+            early_stopping=early_stopping,
+            length_penalty=length_penalty,
+            repetition_penalty=repetition_penalty,
             # decoder_input_ids=batch.decoder_input_ids,
             # decoder_attention_mask=batch.decoder_attention_mask,
             **generation_kwargs,

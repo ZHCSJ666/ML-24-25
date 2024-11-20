@@ -20,7 +20,7 @@ seed: 12345
 trainer:
   min_epochs: 10
   max_epochs: 20
-  gradient_clip_val: 0.5
+#  gradient_clip_val: 1
 
 model:
   net:
@@ -36,7 +36,7 @@ model:
         - ${data.msg_tokenizer}
 
 data:
-  batch_size: 32
+  batch_size: 16
   diff_max_len: ${model.net.encoder_context_max_len}
   msg_max_len: ${model.net.decoder_context_max_len}
   diff_tokenizer:

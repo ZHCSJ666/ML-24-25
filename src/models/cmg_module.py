@@ -1,3 +1,4 @@
+import random
 from typing import Any, Callable, Dict, List, Optional
 
 import torch
@@ -64,6 +65,10 @@ class CommitMessageGenerationModule(LightningModule):
         self.msg_tokenizer: Optional[PreTrainedTokenizerFast] = None
         self.diff_tokenizer: Optional[PreTrainedTokenizerFast] = None
 
+        # Used to store temp batch data to be used for logging at the end of epochs
+        self.train_batch: Optional[BatchTrain] = None
+        self.val_batch: Optional[BatchTrain] = None
+
     def forward(self, batch: Batch) -> Any:
         return self.net(batch)
 
@@ -72,8 +77,9 @@ class CommitMessageGenerationModule(LightningModule):
         # by default lightning executes validation step sanity checks before training starts,
         # so it's worth to make sure validation metrics don't store results from these checks
         self.val_metrics.reset()
+        self.val_batch = None
 
-    def model_step(self, batch: BatchTrain, split: str) -> Dict[str, Any]:
+    def common_step(self, batch: BatchTrain, split: str) -> Dict[str, Any]:
         """Perform a single model step on a batch of data.
 
         :param batch: A batch of data.
@@ -113,17 +119,31 @@ class CommitMessageGenerationModule(LightningModule):
             batch_size=batch_size,
         )
 
-        if self.global_step > 0 and self.current_epoch % 5 == 0:
-            self.net.eval()
-            predictions = self.generate(batch)
-            # decode & postprocess data
-            string_results = self._postprocess_generated(batch, predictions)
-            self.log_results(f"{split}/", string_results)
-            self.net.train()
-
-            # TODO: Compute and log string based metrics like BLEU and ROUGE later here
+        # Here, we basically randomly save a batch
+        # When epoch ends, we'll run this batch data through our model to generate text (in inference mode).
+        # This is solely used for logging/visualization, so that we know how the model is currently generating text.
+        saved_batch = getattr(self, f"{split}_batch")
+        if saved_batch is None or random.random() > 0.5:
+            setattr(self, f"{split}_batch", batch)
 
         return result
+
+    @torch.no_grad()
+    def common_on_epoch_end(self, split) -> None:
+        batch = getattr(self, f"{split}_batch")
+        if batch is None:
+            return
+
+        # generate predictions
+        self.net.eval()
+        predictions = self.generate(batch)
+
+        # decode & postprocess data & log results
+        string_results = self._postprocess_generated(batch, predictions)
+        self.log_results(f"{split}/", string_results)
+
+        self.net.train()
+        setattr(self, f"{split}_batch", None)
 
     def training_step(self, batch: BatchTrain, batch_idx: int) -> Dict[str, Any]:
         """Training step.
@@ -132,7 +152,7 @@ class CommitMessageGenerationModule(LightningModule):
         :param batch_idx: Index of the batch.
         :return: Dictionary containing the loss.
         """
-        result = self.model_step(batch, "train")
+        result = self.common_step(batch, "train")
         return {"loss": result["loss"]}
 
     def test_step(self, batch: BatchTest, batch_idx: int) -> None:
@@ -189,7 +209,7 @@ class CommitMessageGenerationModule(LightningModule):
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
-        pass
+        self.common_on_epoch_end("train")
 
     def validation_step(self, batch: BatchTrain, batch_idx: int) -> None:
         """Validation step.
@@ -197,11 +217,11 @@ class CommitMessageGenerationModule(LightningModule):
         :param batch: A validation batch.
         :param batch_idx: Index of the batch.
         """
-        self.model_step(batch, "val")
+        self.common_step(batch, "val")
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""
-        pass
+        self.common_on_epoch_end("val")
 
     def on_test_epoch_end(self) -> None:
         """Lightning hook that is called when a test epoch ends."""
@@ -240,7 +260,7 @@ class CommitMessageGenerationModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        optimizer = self.hparams.optimizer(params=self.trainer.model.parameters())
+        optimizer = self.hparams.optimizer(model=self.trainer.model)
         if self.hparams.scheduler is not None:
             scheduler = self.hparams.scheduler(optimizer=optimizer)
             return {
@@ -254,7 +274,7 @@ class CommitMessageGenerationModule(LightningModule):
             }
         return {"optimizer": optimizer}
 
-    def log_results(self, prefix, results: List[Dict[str, str]], num_results: int = 1) -> None:
+    def log_results(self, prefix, results: List[Dict[str, str]], num_results: int = 4) -> None:
         """Log generated git commit message results.
 
         This method only supports TensorBoard at the moment.
@@ -268,6 +288,7 @@ class CommitMessageGenerationModule(LightningModule):
             return
 
         writer = tb_logger.experiment
+        random.shuffle(results)
         for result in results[:num_results]:
             for key, value in result.items():
                 writer.add_text(prefix + key, value, self.global_step)
