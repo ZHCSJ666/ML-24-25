@@ -35,8 +35,6 @@ def test_shift_encoder_decoder(default_tokenizers):
         shift_labels=None,
         encoder_input_type=None,
         encoder_context_max_len=None,
-        testing=None,
-        process_retrieved=False,
     )
     labels = (
         [[decoder_tok.bos_token_id]]
@@ -72,8 +70,6 @@ def test_shift_t5(default_tokenizers):
         shift_labels=None,
         encoder_input_type=None,
         encoder_context_max_len=None,
-        testing=None,
-        process_retrieved=False,
         decoder_start_token_id=t5_config.decoder_start_token_id,
     )
     labels = (
@@ -125,8 +121,6 @@ def test_decoder_input_without_history_no_shift(default_tokenizers):
             shift_labels=False,
             encoder_input_type=encoder_input_type,
             encoder_context_max_len=None,
-            testing=None,
-            process_retrieved=False,
         )
         (
             decoder_input_ids,
@@ -209,8 +203,6 @@ def test_decoder_input_without_history_shift(default_tokenizers):
             else True,  # with_history will be ignored when encoder input is history
             shift_labels=False,
             encoder_context_max_len=None,
-            testing=None,
-            process_retrieved=False,
         )
         (
             decoder_input_ids,
@@ -233,8 +225,6 @@ def test_decoder_input_without_history_shift(default_tokenizers):
             else True,  # with_history will be ignored when encoder input is history
             shift_labels=True,
             encoder_context_max_len=None,
-            testing=None,
-            process_retrieved=False,
         )
         (
             shift_decoder_input_ids,
@@ -294,8 +284,6 @@ def test_decoder_input_with_history_no_shift(default_tokenizers):
         encoder_input_type="diff",
         shift_labels=False,
         encoder_context_max_len=None,
-        testing=None,
-        process_retrieved=False,
     )
     decoder_input_ids, decoder_attention_mask, labels = data_collator._process_decoder_input(
         inputs
@@ -379,8 +367,6 @@ def test_decoder_input_with_history_shift(default_tokenizers):
         with_history=True,
         shift_labels=False,
         encoder_context_max_len=None,
-        testing=None,
-        process_retrieved=False,
     )
     (
         decoder_input_ids,
@@ -401,8 +387,6 @@ def test_decoder_input_with_history_shift(default_tokenizers):
         with_history=True,
         shift_labels=True,
         encoder_context_max_len=None,
-        testing=None,
-        process_retrieved=False,
     )
     (
         shift_decoder_input_ids,

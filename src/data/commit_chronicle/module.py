@@ -159,9 +159,7 @@ class CommitChronicleDataModule(LightningDataModule):
                 encoder_context_max_len=self.hparams.diff_max_len,
                 decoder_context_max_len=self.hparams.msg_max_len,
                 with_history=self.hparams.train_with_history,
-                process_retrieved=False,
                 shift_labels=self.hparams.shift_labels,
-                testing=False,
                 decoder_start_token_id=self.hparams.decoder_start_token_id,
             )
             self.test_collator = DataCollatorTest(
@@ -179,8 +177,6 @@ class CommitChronicleDataModule(LightningDataModule):
                 decoder_context_max_len=self.hparams.msg_max_len,
                 with_history=self.hparams.generate_with_history,
                 context_ratio=self.hparams.context_ratio,
-                process_retrieved=False,
-                testing=False,
                 decoder_start_token_id=self.hparams.decoder_start_token_id,
             )
 

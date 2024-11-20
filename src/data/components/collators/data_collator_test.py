@@ -172,61 +172,21 @@ class DataCollatorTest(BaseCollatorUtils):
 
     def __call__(self, examples: List[SingleExample]) -> BatchTest:
         """Processes a list of examples into a BatchTest object."""
-        if not self.testing:
-            (
-                (encoder_input_ids, encoder_attention_mask),
-                (retrieved_diff_input_ids, retrieved_diff_attention_mask),
-                (retrieved_msg_input_ids, retrieved_msg_attention_mask),
-            ) = self._process_encoder_input(examples=examples)
+        encoder_input_ids, encoder_attention_mask = self._process_encoder_input(examples=examples)
 
-            (
-                decoder_input_ids,
-                decoder_attention_mask,
-                targets,
-                prefixes,
-            ) = self._process_decoder_input(examples=examples)
+        (
+            decoder_input_ids,
+            decoder_attention_mask,
+            targets,
+            prefixes,
+        ) = self._process_decoder_input(examples=examples)
 
-            return BatchTest(
-                encoder_input_ids=encoder_input_ids,
-                encoder_attention_mask=encoder_attention_mask,
-                decoder_input_ids=decoder_input_ids,
-                decoder_attention_mask=decoder_attention_mask,
-                labels=None,
-                targets=targets,
-                prefixes=prefixes,
-                retrieved_diff_input_ids=retrieved_diff_input_ids,
-                retrieved_diff_attention_mask=retrieved_diff_attention_mask,
-                retrieved_msg_input_ids=retrieved_msg_input_ids,
-                retrieved_msg_attention_mask=retrieved_msg_attention_mask,
-            )
-        else:
-            batch_size = len(examples)
-            return BatchTest(
-                encoder_input_ids=torch.randint(
-                    1000, (batch_size, self.encoder_context_max_len), dtype=torch.int64
-                ),
-                encoder_attention_mask=torch.ones(
-                    batch_size, self.encoder_context_max_len, dtype=torch.int64
-                ),
-                decoder_input_ids=torch.randint(
-                    1000, (batch_size, self.decoder_context_max_len), dtype=torch.int64
-                ),
-                decoder_attention_mask=torch.ones(
-                    batch_size, self.decoder_context_max_len, dtype=torch.int64
-                ),
-                labels=None,
-                targets=[],
-                prefixes=[],
-                retrieved_diff_input_ids=torch.randint(
-                    1000, (batch_size, self.encoder_context_max_len), dtype=torch.int64
-                ),
-                retrieved_diff_attention_mask=torch.ones(
-                    batch_size, self.encoder_context_max_len, dtype=torch.int64
-                ),
-                retrieved_msg_input_ids=torch.randint(
-                    1000, (batch_size, self.encoder_context_max_len), dtype=torch.int64
-                ),
-                retrieved_msg_attention_mask=torch.ones(
-                    batch_size, self.encoder_context_max_len, dtype=torch.int64
-                ),
-            )
+        return BatchTest(
+            encoder_input_ids=encoder_input_ids,
+            encoder_attention_mask=encoder_attention_mask,
+            decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=decoder_attention_mask,
+            labels=None,
+            targets=targets,
+            prefixes=prefixes,
+        )

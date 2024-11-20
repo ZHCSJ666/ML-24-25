@@ -31,9 +31,7 @@ def collator_diff(default_tokenizers):
         encoder_context_max_len=512,
         decoder_context_max_len=256,
         with_history=True,
-        process_retrieved=False,
         encoder_input_type="diff",
-        testing=False,
     )
     return collator
 
@@ -51,9 +49,7 @@ def test_diff_single_example(default_tokenizers, collator_diff):
             pos_in_file=0,
         )
     ]
-    (encoder_input_ids, encoder_attention_mask), _, _ = collator_diff._process_encoder_input(
-        diff_inputs
-    )
+    encoder_input_ids, encoder_attention_mask = collator_diff._process_encoder_input(diff_inputs)
 
     assert encoder_input_ids.shape == (1, 102)
     assert torch.all(
@@ -85,9 +81,7 @@ def test_diff_batch_pad_max_len(default_tokenizers, collator_diff):
             pos_in_file=1,
         ),
     ]
-    (encoder_input_ids, encoder_attention_mask), _, _ = collator_diff._process_encoder_input(
-        diff_inputs
-    )
+    encoder_input_ids, encoder_attention_mask = collator_diff._process_encoder_input(diff_inputs)
 
     assert encoder_input_ids.shape == (2, 102)
     assert torch.all(
@@ -132,9 +126,7 @@ def test_diff_batch_truncate_max_len(default_tokenizers, collator_diff):
             pos_in_file=1,
         ),
     ]
-    (encoder_input_ids, encoder_attention_mask), _, _ = collator_diff._process_encoder_input(
-        diff_inputs
-    )
+    encoder_input_ids, encoder_attention_mask = collator_diff._process_encoder_input(diff_inputs)
 
     assert encoder_input_ids.shape == (2, 512)
     assert torch.all(

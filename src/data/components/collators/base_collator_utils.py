@@ -1,8 +1,7 @@
 """Shamelessly lifted from https://github.com/JetBrains-Research/commit_message_generation"""
 
-import logging
 from dataclasses import dataclass
-from typing import List, Literal, Optional, Tuple
+from typing import List, Tuple
 
 import torch
 
@@ -22,9 +21,6 @@ class BaseCollatorUtils:
         with_history: True to add history to decoder input, False otherwise.
         encoder_input_type: Should be one of `history`, `diff`, corresponding data will be used
           to construct encoder input.
-        process_retrieved: Whether retrieved examples are expected as input or not.
-        testing: True to generate tensors of maximum possible shape with random numbers instead of actually processing
-         input data (used to quickly test whether current batch size fits in GPU memory).
     """
 
     msg_bos_token_id: int
@@ -38,8 +34,6 @@ class BaseCollatorUtils:
     decoder_context_max_len: int
     with_history: bool
     encoder_input_type: str
-    process_retrieved: bool
-    testing: bool
 
     def _pad_tensor(
         self, input_tensor: torch.Tensor, pad_len: int, value: int, left: bool
@@ -192,11 +186,7 @@ class BaseCollatorUtils:
 
     def _process_encoder_input(
         self, examples: List[SingleExample]
-    ) -> Tuple[
-        Tuple[torch.Tensor, torch.Tensor],
-        Tuple[Optional[torch.Tensor], Optional[torch.Tensor]],
-        Tuple[Optional[torch.Tensor], Optional[torch.Tensor]],
-    ]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """A helper method to process encoder input.
 
         Either diff or history can be passed to encoder.
@@ -217,23 +207,4 @@ class BaseCollatorUtils:
             results = self._process_history(history_inputs)
         else:
             raise ValueError("Unknown encoder input type")
-
-        if self.process_retrieved:
-            if all(
-                example.retrieved_msg_input_ids is not None
-                and example.retrieved_diff_input_ids is not None
-                for example in examples
-            ):
-                retrieved_diff_inputs: List[List[int]] = [example.retrieved_diff_input_ids for example in examples]  # type: ignore[misc]
-                retrieved_diff_results = self._process_inputs(retrieved_diff_inputs)
-                retrieved_msg_input_ids: List[List[int]] = [example.retrieved_msg_input_ids for example in examples]  # type: ignore[misc]
-                retrieved_msg_results = self._process_inputs(
-                    retrieved_msg_input_ids, are_messages=True
-                )
-                return results, retrieved_diff_results, retrieved_msg_results
-            else:
-                logging.warning(
-                    "Collator is configured to process retrieved data, "
-                    "but it is not present in input."
-                )
-        return results, (None, None), (None, None)
+        return results
