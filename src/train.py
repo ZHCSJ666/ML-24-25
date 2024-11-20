@@ -1,3 +1,4 @@
+import pprint
 from typing import Any, Dict, List, Optional, Tuple
 
 import hydra
@@ -58,7 +59,7 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: CommitChronicleDataModule = hydra.utils.instantiate(cfg.data)
     log.info(f"Instantiating model <{cfg.model._target_}>")
-    model: LightningModule = hydra.utils.instantiate(cfg.model)
+    model: LightningModule = hydra.utils.instantiate(cfg.model, _convert_="object")
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = instantiate_callbacks(cfg.get("callbacks"))
@@ -101,6 +102,8 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
     # merge train and test metrics
     metric_dict = {**train_metrics, **test_metrics}
+
+    log.info(pprint.pformat(metric_dict, indent=4))
 
     return metric_dict, object_dict
 

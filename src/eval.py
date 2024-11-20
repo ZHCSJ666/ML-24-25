@@ -1,3 +1,4 @@
+import pprint
 from typing import Any, Dict, List, Tuple
 
 import hydra
@@ -78,6 +79,8 @@ def evaluate(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     # predictions = trainer.predict(model=model, dataloaders=dataloaders, ckpt_path=cfg.ckpt_path)
 
     metric_dict = trainer.callback_metrics
+
+    log.info(pprint.pformat(metric_dict, indent=4))
 
     return metric_dict, object_dict
 
