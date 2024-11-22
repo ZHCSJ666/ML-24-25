@@ -25,7 +25,7 @@ git https://github.com/ZHCSJ666/ML-24-25
 cd ML-24-25
 
 # create conda environment and install dependencies
-conda env create -f environment.yaml
+conda env create --name cmg -f environment.yaml
 
 # activate conda environment
 conda activate cmg

@@ -1,0 +1,26 @@
+services:
+  cmg:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ndersam/cmg-dev
+    container_name: cmg
+    working_dir: /opt/project
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTHONPATH=/opt/project
+      # https://huggingface.co/docs/transformers/installation#offline-mode
+      - HF_DATASETS_OFFLINE=1
+      - HF_HUB_OFFLINE=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    volumes:
+      - ./logs/docker/data:/opt/project/data
+      - ./logs/docker/logs:/opt/project/logs
+
