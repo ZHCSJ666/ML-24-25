@@ -1,4 +1,4 @@
-name: cmg # short for commit message generation
+#name: cmg # short for commit message generation
 channels:
   - pytorch
   - nvidia
@@ -7,8 +7,8 @@ channels:
   - defaults
 dependencies:
   - python=3.11
-  - pytorch=2.3.0
-  - pytorch-cuda=11.8
+  - pytorch=2.5.1
+  - pytorch-cuda=12.4
   - torchvision=0.*
   - torchtext
   - lightning=2.*

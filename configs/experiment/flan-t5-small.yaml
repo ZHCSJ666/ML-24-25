@@ -43,6 +43,8 @@ data:
     name_or_path: Salesforce/codet5-small
   msg_tokenizer:
     name_or_path: Salesforce/codet5-small
-  decoder_start_token_id:
-    _target_: models.components.seq2seq_wrapper.Seq2SeqWrapper.get_decoder_start_token_id
-    name_or_path: Salesforce/codet5-small
+  # This value is the output obtained from running
+  # from  models.components.seq2seq_wrapper Seq2SeqWrapper
+  # decoder_start_token_id = Seq2SeqWrapper.get_decoder_start_token_id('Salesforce/codet5-small')
+  decoder_start_token_id: 0
+

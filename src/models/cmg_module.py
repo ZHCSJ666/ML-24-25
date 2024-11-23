@@ -24,8 +24,8 @@ class CommitMessageGenerationModule(LightningModule):
         self,
         net: nn.Module | Callable[..., nn.Module],
         optimizer: Callable[..., torch.optim.Optimizer],
-        scheduler: Callable[..., torch.optim.lr_scheduler],
-        compile: bool,
+        scheduler: Optional[Callable[..., torch.optim.lr_scheduler]] = None,
+        compile: bool = False,
         shift: bool = False,
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -126,10 +126,21 @@ class CommitMessageGenerationModule(LightningModule):
         if saved_batch is None or random.random() > 0.5:
             setattr(self, f"{split}_batch", batch)
 
+        if split == "train":
+            if self.train_batch is None or random.random() > 0.5:
+                self.train_batch = batch
+        elif split == "val":
+            if self.val_batch is None or random.random() > 0.5:
+                self.val_batch = batch
+
         return result
 
     @torch.no_grad()
     def common_on_epoch_end(self, split) -> None:
+        # if split == "val":
+        #     batch = self.val_batch
+        # else:
+        #     batch = self.train_batch
         batch = getattr(self, f"{split}_batch")
         if batch is None:
             return
