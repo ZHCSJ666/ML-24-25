@@ -20,3 +20,4 @@ transformers
 tensorboard
 lightning
 rich
+torchmetrics

@@ -56,14 +56,6 @@ class Batch:
                                                used to focus on valid tokens in the decoder input sequence.
         labels (Optional[torch.Tensor]): Tensor containing the target output tokens (labels) for training;
                                          these are compared with the model’s predicted output during loss calculation.
-        retrieved_diff_input_ids (Optional[torch.Tensor]): Tensor containing tokenized sequences of retrieved diffs,
-                                                           which may provide context for the model.
-        retrieved_diff_attention_mask (Optional[torch.Tensor]): Attention mask for `retrieved_diff_input_ids`,
-                                                                marking valid token positions for these diffs.
-        retrieved_msg_input_ids (Optional[torch.Tensor]): Tensor containing tokenized sequences of retrieved commit
-                                                          messages, serving as additional context for the model.
-        retrieved_msg_attention_mask (Optional[torch.Tensor]): Attention mask for `retrieved_msg_input_ids`,
-                                                               marking valid token positions in the retrieved messages.
     """
 
     encoder_input_ids: torch.Tensor
@@ -71,10 +63,6 @@ class Batch:
     decoder_input_ids: torch.Tensor
     decoder_attention_mask: torch.Tensor
     labels: Optional[torch.Tensor]
-    retrieved_diff_input_ids: Optional[torch.Tensor]
-    retrieved_diff_attention_mask: Optional[torch.Tensor]
-    retrieved_msg_input_ids: Optional[torch.Tensor]
-    retrieved_msg_attention_mask: Optional[torch.Tensor]
 
     def pin_memory(self):
         """Pins all tensors to memory, making them GPU-accessible for faster data transfer if using
@@ -90,14 +78,6 @@ class Batch:
         self.decoder_attention_mask = self.decoder_attention_mask.pin_memory()
         if self.labels is not None:
             self.labels = self.labels.pin_memory()
-        if self.retrieved_diff_input_ids is not None:
-            self.retrieved_diff_input_ids = self.retrieved_diff_input_ids.pin_memory()
-        if self.retrieved_diff_attention_mask is not None:
-            self.retrieved_diff_attention_mask = self.retrieved_diff_attention_mask.pin_memory()
-        if self.retrieved_msg_input_ids is not None:
-            self.retrieved_msg_input_ids = self.retrieved_msg_input_ids.pin_memory()
-        if self.retrieved_msg_attention_mask is not None:
-            self.retrieved_msg_attention_mask = self.retrieved_msg_attention_mask.pin_memory()
         return self
 
 

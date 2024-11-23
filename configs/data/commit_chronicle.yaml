@@ -3,11 +3,20 @@ data_dir: ${paths.data_dir}commit-chronicle
 languages: ["Go"]
 change_types: ["ADD"]
 
-diff_tokenizer_name_or_path: Salesforce/codet5-base
-msg_tokenizer_name_or_path: Salesforce/codet5-base
-model_configuration: Salesforce/codet5-base
+diff_tokenizer:
+  _target_: src.data.components.tokenization.load_tokenizer
+  name_or_path: ???
+
+msg_tokenizer:
+  _target_: src.data.components.tokenization.load_tokenizer
+  name_or_path: ???
+
+decoder_start_token_id: ???
+
+diff_max_len: ???
+msg_max_len: ???
 
 # data loader stuff
 batch_size: 16 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
-num_workers: 16
+num_workers: 15
 pin_memory: False

@@ -40,20 +40,17 @@ pip install -e . --config-settings editable_mode=compat
 
 ## How to run
 
-Train model with default configuration
+Training examples with [flan-t5-small](configs/experiment/flan-t5-small.yaml) experiment configuration
 
 ```bash
-# train on CPU
-python src/train.py trainer=cpu
+# train with flan-t5 model on Commit Chronicle dataset
+python src/train.py experiment=flan-t5-small logger=tensorboard
 
-# train on GPU
-python src/train.py trainer=gpu
-```
+# (debug) overfit on subset of training data
+python src/train.py experiment=flan-t5-small logger=tensorboard +trainer.overfit_batches=3 trainer.max_epochs=50
 
-Train model with chosen experiment configuration from [configs/experiment/](configs/experiment/)
-
-```bash
-python src/train.py experiment=experiment_name.yaml
+# (debug) fast dev run
+python src/train.py experiment=flan-t5-small logger=tensorboard +trainer.fast_dev_run=True trainer=cpu
 ```
 
 You can override any parameter from command line like this

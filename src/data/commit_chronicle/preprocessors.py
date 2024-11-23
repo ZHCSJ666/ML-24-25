@@ -23,7 +23,7 @@ class CommitChroniclePreprocessor:
         languages: Sequence[str] = ("Go",),
         change_types: Sequence[str] = ("ADD"),
         add_history_to_inputs: bool = False,
-        decoder_context_max_length: Optional[int] = None,
+        msg_max_len: Optional[int] = None,
         cpu_count: Optional[int] = None,
     ) -> None:
         """
@@ -35,13 +35,13 @@ class CommitChroniclePreprocessor:
             diff_max_len:
             languages:
             add_history_to_inputs: True to add history inputs to each example in a processed file.
-            decoder_context_max_length: Should be provided when add_history_to_inputs is True.
+            msg_max_len: Should be provided when add_history_to_inputs is True.
             cpu_count:
         """
         super().__init__()
 
         assert not add_history_to_inputs or (
-            add_history_to_inputs and decoder_context_max_length is not None
+            add_history_to_inputs and msg_max_len is not None
         ), "You have to define max context length to aggregate history in inputs."
 
         self._diff_tokenizer = diff_tokenizer
@@ -52,7 +52,7 @@ class CommitChroniclePreprocessor:
         self.languages = languages
         self.cpu_count = cpu_count or mp.cpu_count()
         self.add_history_to_inputs = add_history_to_inputs
-        self.decoder_context_max_length = decoder_context_max_length
+        self.decoder_context_max_length = msg_max_len
         self.change_types = change_types
 
     def processed_path_for(self, data_dir: Path, split: str) -> Path:
@@ -91,8 +91,11 @@ class CommitChroniclePreprocessor:
                 .filter(
                     lambda example: example["language"] in self.languages,
                     num_proc=self.cpu_count,
-                ).filter(
-                    lambda example: all(mod["change_type"] in self.change_types for mod in example["mods"]),
+                )
+                .filter(
+                    lambda example: all(
+                        mod["change_type"] in self.change_types for mod in example["mods"]
+                    ),
                     num_proc=self.cpu_count,
                 )
                 .map(self._process_example, num_proc=self.cpu_count)
@@ -171,7 +174,6 @@ class CommitChroniclePreprocessor:
             else:
                 file_diff = f"{mod['new_path']}"
             diff += file_diff + line_sep + self._preprocess_diff(mod["diff"])
-
 
         return diff
 

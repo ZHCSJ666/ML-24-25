@@ -147,56 +147,16 @@ class DataCollatorTrain(BaseCollatorUtils):
 
     def __call__(self, examples: List[SingleExample]) -> BatchTrain:
         """Processes a list of examples into a BatchTrain object."""
-        if not self.testing:
-            (
-                (encoder_input_ids, encoder_attention_mask),
-                (retrieved_diff_input_ids, retrieved_diff_attention_mask),
-                (retrieved_msg_input_ids, retrieved_msg_attention_mask),
-            ) = self._process_encoder_input(examples=examples)
+        encoder_input_ids, encoder_attention_mask = self._process_encoder_input(examples=examples)
 
-            decoder_input_ids, decoder_attention_mask, labels = self._process_decoder_input(
-                examples=examples
-            )
+        decoder_input_ids, decoder_attention_mask, labels = self._process_decoder_input(
+            examples=examples
+        )
 
-            return BatchTrain(
-                encoder_input_ids=encoder_input_ids,
-                encoder_attention_mask=encoder_attention_mask,
-                decoder_input_ids=decoder_input_ids,
-                decoder_attention_mask=decoder_attention_mask,
-                labels=labels,
-                retrieved_diff_input_ids=retrieved_diff_input_ids,
-                retrieved_diff_attention_mask=retrieved_diff_attention_mask,
-                retrieved_msg_input_ids=retrieved_msg_input_ids,
-                retrieved_msg_attention_mask=retrieved_msg_attention_mask,
-            )
-        else:
-            batch_size = len(examples)
-            return BatchTrain(
-                encoder_input_ids=torch.randint(
-                    1000, (batch_size, self.encoder_context_max_len), dtype=torch.int64
-                ),
-                encoder_attention_mask=torch.ones(
-                    batch_size, self.encoder_context_max_len, dtype=torch.int64
-                ),
-                decoder_input_ids=torch.randint(
-                    1000, (batch_size, self.decoder_context_max_len), dtype=torch.int64
-                ),
-                decoder_attention_mask=torch.ones(
-                    batch_size, self.decoder_context_max_len, dtype=torch.int64
-                ),
-                labels=torch.randint(
-                    1000, (batch_size, self.decoder_context_max_len), dtype=torch.int64
-                ),
-                retrieved_diff_input_ids=torch.randint(
-                    1000, (batch_size, self.encoder_context_max_len), dtype=torch.int64
-                ),
-                retrieved_diff_attention_mask=torch.ones(
-                    batch_size, self.encoder_context_max_len, dtype=torch.int64
-                ),
-                retrieved_msg_input_ids=torch.randint(
-                    1000, (batch_size, self.encoder_context_max_len), dtype=torch.int64
-                ),
-                retrieved_msg_attention_mask=torch.ones(
-                    batch_size, self.encoder_context_max_len, dtype=torch.int64
-                ),
-            )
+        return BatchTrain(
+            encoder_input_ids=encoder_input_ids,
+            encoder_attention_mask=encoder_attention_mask,
+            decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=decoder_attention_mask,
+            labels=labels,
+        )

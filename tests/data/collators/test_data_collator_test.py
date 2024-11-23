@@ -67,8 +67,6 @@ def test_decoder_input_with_history(msgs, histories, default_tokenizers):
             context_ratio=context_ratio,
             encoder_input_type="diff",
             encoder_context_max_len=None,
-            testing=None,
-            process_retrieved=False,
         )
         (
             decoder_input_ids,
@@ -139,8 +137,6 @@ def test_decoder_input_without_history(default_tokenizers):
                 else True,  # with_history will be ignored when encoder input is history
                 context_ratio=context_ratio,
                 encoder_context_max_len=None,
-                testing=None,
-                process_retrieved=False,
             )
         (
             decoder_input_ids,
@@ -183,10 +179,8 @@ def test_process_msg_gen(default_tokenizers):
         encoder_context_max_len=None,
         decoder_context_max_len=None,
         context_ratio=None,
-        testing=None,
         encoder_input_type=None,
         with_history=None,
-        process_retrieved=False,
     )
 
     message = "Simple message example"
