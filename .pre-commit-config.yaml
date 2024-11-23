@@ -68,6 +68,7 @@ repos:
             --ignore-nested-functions,
             -vv,
           ]
+        additional_dependencies: [setuptools]
 
   # python check (PEP8), programming errors and code complexity
   - repo: https://github.com/PyCQA/flake8
@@ -124,7 +125,7 @@ repos:
       - id: codespell
         args:
           - --skip=logs/**,data/**,*.ipynb
-          # - --ignore-words-list=abc,def
+          - --ignore-words-list=rouge,ROUGE
 
   # jupyter prepare html reports and clear output
   - repo: https://github.com/arashabzd/pre-commit-nbconvert
