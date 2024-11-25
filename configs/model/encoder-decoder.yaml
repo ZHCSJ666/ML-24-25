@@ -1,5 +1,4 @@
 _target_: src.models.cmg_module.CommitMessageGenerationModule
-model_name: "simple-transformer"
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: true
@@ -14,13 +13,18 @@ scheduler:
   patience: 10
 
 net:
-  _target_: src.models.components.simple_transformer.SimpleTransformer
-  embed_size: 256
-  num_heads: 8
-  hidden_dim: 512
-  num_layers: 3
-  dropout: 0.1
-  vocab_size: ??? # This will be overridden by the data module
+  _target_: src.models.components.encoder_decoder.EncoderDecoder
+  num_beams: ??
+  max_seq_length: ???
+  beam_early_stopping: true,
+  embed_size: ???
+  num_heads: ???
+  hidden_dim: ???
+  num_layers: ???
+  encoder_context_max_len: ???
+  decoder_context_max_len: ???
+  encoder_vocab_size: ???
+  decoder_vocab_size: ???
 
 # compile model for faster training with pytorch 2.0
 compile: false

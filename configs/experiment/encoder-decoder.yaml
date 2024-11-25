@@ -5,7 +5,7 @@
 
 defaults:
   - override /data: commit_chronicle
-  - override /model: flan-t5-small
+  - override /model: encoder-decoder
   - override /callbacks: default
   - override /trainer: gpu
   - override /logger: tensorboard
@@ -13,19 +13,27 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["commit_chronicle", "flan-t5-small"]
+tags: ["commit_chronicle", "encoder_decoder"]
 
 seed: 12345
 
 trainer:
   min_epochs: 10
   max_epochs: 20
-#  gradient_clip_val: 1
+  gradient_clip_val: 1
 
 model:
   net:
-    encoder_context_max_len: 512
-    decoder_context_max_len: 512
+    encoder_context_max_len: 100
+    decoder_context_max_len: 100
+    max_seq_length: 100
+    beam_early_stopping: true
+    num_beams: 3
+    embed_size: 32
+    num_heads: 2
+    hidden_dim: 16
+    num_layers: 3
+    dropout: 0.1
     encoder_vocab_size:
       _target_: builtins.len
       _args_:
@@ -43,7 +51,3 @@ data:
     name_or_path: Salesforce/codet5-small
   msg_tokenizer:
     name_or_path: Salesforce/codet5-small
-  # This value is the output obtained from running
-  # from  models.components.seq2seq_wrapper Seq2SeqWrapper
-  # decoder_start_token_id = Seq2SeqWrapper.get_decoder_start_token_id('Salesforce/codet5-small')
-  decoder_start_token_id: 0

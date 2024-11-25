@@ -160,7 +160,7 @@ class CommitChronicleDataModule(LightningDataModule):
                 decoder_context_max_len=self.hparams.msg_max_len,
                 with_history=self.hparams.train_with_history,
                 shift_labels=self.hparams.shift_labels,
-                decoder_start_token_id=self.hparams.decoder_start_token_id,
+                decoder_start_token_id=self.msg_tokenizer.bos_token_id,
             )
             self.test_collator = DataCollatorTest(
                 diff_bos_token_id=self.diff_tokenizer.bos_token_id,  # type: ignore[attr-defined]

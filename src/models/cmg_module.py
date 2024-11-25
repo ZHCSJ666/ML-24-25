@@ -11,6 +11,7 @@ from transformers.modeling_outputs import Seq2SeqLMOutput
 
 from src.data.types import Batch, BatchTest, BatchTrain
 from src.metrics import MRR, Accuracy
+from src.models.components.encoder_decoder import EncoderDecoder
 
 
 class CommitMessageGenerationModule(LightningModule):
@@ -93,9 +94,10 @@ class CommitMessageGenerationModule(LightningModule):
             loss = outputs.loss
             logits = outputs.logits
         else:
-            logits = outputs  # (batch * seq_len)
-            # Compute loss
-            loss = self.criterion(outputs.permute(0, 2, 1), batch.labels)
+            logits = outputs
+            loss = self.criterion(
+                outputs.permute(0, 2, 1), batch.labels
+            )  # Shape of both: (batch, seq_len, vocab_size), as Pytorch expects
         result["loss"] = loss
         batch_size = len(batch.encoder_input_ids)
         self.log(
@@ -123,14 +125,14 @@ class CommitMessageGenerationModule(LightningModule):
         # When epoch ends, we'll run this batch data through our model to generate text (in inference mode).
         # This is solely used for logging/visualization, so that we know how the model is currently generating text.
         saved_batch = getattr(self, f"{split}_batch")
-        if saved_batch is None or random.random() > 0.5:
+        if saved_batch is None or random.random() > 0.5:  # nosec B311
             setattr(self, f"{split}_batch", batch)
 
         if split == "train":
-            if self.train_batch is None or random.random() > 0.5:
+            if self.train_batch is None or random.random() > 0.5:  # nosec B311
                 self.train_batch = batch
         elif split == "val":
-            if self.val_batch is None or random.random() > 0.5:
+            if self.val_batch is None or random.random() > 0.5:  # nosec B311
                 self.val_batch = batch
 
         return result
@@ -180,6 +182,11 @@ class CommitMessageGenerationModule(LightningModule):
 
     def generate(self, batch: Batch, **kwargs) -> Any:
         kwargs = kwargs or self.hparams.generation_kwargs or {}
+
+        if isinstance(self.net, EncoderDecoder):
+            return self.net.generate(
+                batch,
+            )
         return self.net.generate(
             batch,
             **kwargs,
@@ -271,7 +278,7 @@ class CommitMessageGenerationModule(LightningModule):
 
         :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
         """
-        optimizer = self.hparams.optimizer(model=self.trainer.model)
+        optimizer = self.hparams.optimizer(self.trainer.model.parameters())
         if self.hparams.scheduler is not None:
             scheduler = self.hparams.scheduler(optimizer=optimizer)
             return {
