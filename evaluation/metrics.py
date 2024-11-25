@@ -2,12 +2,12 @@ import os
 
 # Set environment variables for offline mode and cache directories
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-os.environ["TRANSFORMERS_CACHE"] = "/mnt/data/users/liamding/data/LLAVA-2"
-os.environ["HF_HOME"] = "/mnt/data/users/liamding/data/LLAVA-2"
+os.environ["TRANSFORMERS_CACHE"] = "/path/to/your/transformers/cache"
+os.environ["HF_HOME"] = "/path/to/your/huggingface/home"
 
 # Add NLTK data path
 import nltk
-nltk.data.path.append('/mnt/data/users/liamding/data/LLAVA-2')
+nltk.data.path.append('/path/to/your/nltk/data')
 
 import sacrebleu
 from bert_score import score
@@ -25,26 +25,26 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Define the local model path
-bert_name = "/mnt/data/users/liamding/data/LLAVA-2/bert-base-chinese"
+# Define the model name or path (changed to English model)
+bert_name = "bert-base-uncased"
 
 # Load the tokenizer
-tokenizer = AutoTokenizer.from_pretrained(bert_name, local_files_only=True)
+tokenizer = AutoTokenizer.from_pretrained(bert_name, local_files_only=False)
 logger.info(f"Tokenizer successfully loaded from {bert_name}.")
 
 # Load the model configuration to get the number of layers
-config = AutoConfig.from_pretrained(bert_name, local_files_only=True)
+config = AutoConfig.from_pretrained(bert_name, local_files_only=False)
 num_layers = config.num_hidden_layers
 
 # Load the model
-model = AutoModel.from_pretrained(bert_name, local_files_only=True)
+model = AutoModel.from_pretrained(bert_name, local_files_only=False)
 logger.info(f"Model successfully loaded from {bert_name}.")
 
 def bleu_score(predict, answer):
     """
     Calculate BLEU score
     """
-    bleu = sacrebleu.corpus_bleu(predict, answer, lowercase=True, tokenize="flores101")
+    bleu = sacrebleu.corpus_bleu(predict, answer, lowercase=True, tokenize="13a")
     return bleu.score
 
 def chrf_score(predict, answer):
@@ -58,7 +58,7 @@ def ter_score(predict, answer):
     """
     Calculate TER score
     """
-    ter = sacrebleu.corpus_ter(predict, answer, asian_support=True, normalized=True, no_punct=True)
+    ter = sacrebleu.corpus_ter(predict, answer, normalized=True, no_punct=True)
     return ter.score
 
 def bertscore(predict, answer):
@@ -68,9 +68,9 @@ def bertscore(predict, answer):
     P, R, F1 = score(
         cands=predict,
         refs=answer,
-        model_type=bert_name,  # Use the local model path
+        model_type=bert_name,  # Use the model name
         num_layers=num_layers,
-        lang='zh',
+        lang='en',
         verbose=True,
         idf=False,
         rescale_with_baseline=False,
@@ -94,17 +94,16 @@ def meteor(predict, answer, type):
     else:
         return all_meteor[0]
 
-def extract(data, target):
+def extract(data):
     """
-    Extract prediction and reference translations from data
+    Extract prediction and reference commit messages from data
     """
     predicts = []
     answers = []
     logger.info("Extracting data...")
     for item in tqdm(data):
-        id = item["id"]
-        pred = item['target'].strip()
-        ans = target[id].strip()
+        pred = item['generated_commit'].strip()
+        ans = item['reference_commit'].strip()
         predicts.append(pred)
         answers.append(ans)
     logger.info("Data extraction completed.")
@@ -167,19 +166,16 @@ def cal_each_metrics(predicts, answers):
     logger.info(f"Metrics for each sample saved to {data_path.with_name(data_path.stem + '_each.csv')}")
 
 if __name__ == "__main__":
-    # Paths to input data and reference translations
-    data_file = "/mnt/data/users/liamding/data/3AM/3AM/original.json"
+    # Path to input data
+    data_file = "/path/to/your/model_outputs.json"  # Update with your actual path
     data_path = Path(data_file)
-    target_file = "/mnt/data/users/liamding/data/3AM/3AM/data/test.zh"
 
-    logger.info("Loading reference translations...")
-    with open(target_file, "r", encoding="utf-8") as f:
-        target = f.readlines()
-    logger.info("Loading model-generated translations...")
-    data = json.load(open(data_file, "r", encoding="utf-8"))
+    logger.info("Loading model-generated and reference commit messages...")
+    with open(data_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
     logger.info("Extracting predictions and references...")
-    predicts, answers = extract(data, target)
+    predicts, answers = extract(data)
 
     logger.info("Calculating metrics for each sample...")
     print("Metrics for each sample:")
