@@ -11,6 +11,7 @@ from transformers.modeling_outputs import Seq2SeqLMOutput
 
 from src.data.types import Batch, BatchTest, BatchTrain
 from src.metrics import MRR, Accuracy
+from src.metrics.bleu import SacreBLEUScore
 from src.models.components.encoder_decoder import EncoderDecoder
 
 
@@ -52,6 +53,12 @@ class CommitMessageGenerationModule(LightningModule):
 
         # We'd add string-based metrics like BLEU, ROUGE later.
         # For now, we are using tensor-based metrics
+        self.text_metrics = MetricCollection(
+            {
+                "bleu": SacreBLEUScore(),
+            }
+        )
+
         metrics = MetricCollection(
             {
                 "acc_top1": Accuracy(top_k=1, shift=shift),
@@ -71,6 +78,14 @@ class CommitMessageGenerationModule(LightningModule):
         self.val_batch: Optional[BatchTrain] = None
 
     def forward(self, batch: Batch) -> Any:
+        """Forward pass of the model.
+
+        Args:
+            batch: Input batch containing source and target sequences.
+
+        Returns:
+            dict: Dictionary containing model outputs including logits and predictions.
+        """
         return self.net(batch)
 
     def on_train_start(self) -> None:
@@ -121,6 +136,24 @@ class CommitMessageGenerationModule(LightningModule):
             batch_size=batch_size,
         )
 
+        if split == "val":
+            # Convert logits to predictions
+            token_preds = self.generate(batch)
+            text_results = self._postprocess_generated(batch, token_preds)
+            # the text_results is a list of dicts with two keys: 'input' and 'prediction'
+            inputs, preds = zip(
+                *[(result["input"], result["prediction"]) for result in text_results]
+            )
+            bleu_scores = self.text_metrics["bleu"](preds, inputs)
+            self.log(
+                "val/bleu",
+                bleu_scores,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                batch_size=batch_size,
+            )
+
         # Here, we basically randomly save a batch
         # When epoch ends, we'll run this batch data through our model to generate text (in inference mode).
         # This is solely used for logging/visualization, so that we know how the model is currently generating text.
@@ -139,6 +172,14 @@ class CommitMessageGenerationModule(LightningModule):
 
     @torch.no_grad()
     def common_on_epoch_end(self, split) -> None:
+        """Common operations to perform at the end of each epoch.
+
+        Args:
+            split: String indicating the current stage ('train', 'val', or 'test').
+
+        Returns:
+            dict: Dictionary containing aggregated metrics for the epoch.
+        """
         # if split == "val":
         #     batch = self.val_batch
         # else:
@@ -181,6 +222,15 @@ class CommitMessageGenerationModule(LightningModule):
         self.log_results("test/", string_results)
 
     def generate(self, batch: Batch, **kwargs) -> Any:
+        """Generate commit messages for given source sequences.
+
+        Args:
+            batch: Input batch containing source and target sequences.
+            **kwargs: Additional keyword arguments passed to the generation method.
+
+        Returns:
+            torch.Tensor: Generated sequence token IDs.
+        """
         kwargs = kwargs or self.hparams.generation_kwargs or {}
 
         if isinstance(self.net, EncoderDecoder):
@@ -220,9 +270,25 @@ class CommitMessageGenerationModule(LightningModule):
         ]
 
     def decode_src(self, *args, **kwargs):
+        """Decode source sequence IDs back to text.
+
+        Args:
+            ids: Tensor of token IDs representing the source sequence.
+
+        Returns:
+            str: Decoded source text.
+        """
         return tuple(self.diff_tokenizer.batch_decode(arg, **kwargs) for arg in args)
 
     def decode_tgt(self, *args, **kwargs):
+        """Decode target sequence IDs back to text.
+
+        Args:
+            ids: Tensor of token IDs representing the target sequence.
+
+        Returns:
+            str: Decoded target text.
+        """
         return tuple(self.msg_tokenizer.batch_decode(arg, **kwargs) for arg in args)
 
     def on_train_epoch_end(self) -> None:
