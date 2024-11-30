@@ -111,7 +111,7 @@ class CommitMessageGenerationModule(LightningModule):
         else:
             logits = outputs
             loss = self.criterion(
-                outputs.permute(0, 2, 1), batch.labels
+                logits.permute(0, 2, 1), batch.labels
             )  # Shape of both: (batch, seq_len, vocab_size), as Pytorch expects
         result["loss"] = loss
         batch_size = len(batch.encoder_input_ids)

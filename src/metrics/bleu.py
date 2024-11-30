@@ -71,10 +71,10 @@ class SacreBLEUScore(BLEUScore):
 
     def __init__(
         self,
-        n_gram: int = 4,
+        n_gram: int = 1,
         smooth: bool = False,
         tokenize: _TokenizersLiteral = "13a",
-        lowercase: bool = False,
+        lowercase: bool = True,
         weights: Optional[Sequence[float]] = None,
         **kwargs: Any,
     ) -> None:
