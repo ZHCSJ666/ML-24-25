@@ -12,6 +12,7 @@ from transformers.modeling_outputs import Seq2SeqLMOutput
 from src.data.types import Batch, BatchTest, BatchTrain
 from src.metrics import MRR, Accuracy
 from src.metrics.bleu import SacreBLEUScore
+from src.metrics.rouge import ROUGEScore
 from src.models.components.encoder_decoder import EncoderDecoder
 
 
@@ -51,11 +52,14 @@ class CommitMessageGenerationModule(LightningModule):
 
         self.net = net
 
-        # We'd add string-based metrics like BLEU, ROUGE later.
-        # For now, we are using tensor-based metrics
-        self.text_metrics = MetricCollection(
+        text_metrics = MetricCollection(
             {
-                "bleu": SacreBLEUScore(),
+                "sacre_bleu1": SacreBLEUScore(n_gram=1),
+                "sacre_bleu4": SacreBLEUScore(n_gram=4),
+                "rouge1": ROUGEScore(rouge_keys="rouge1")["rouge1_fmeasure"],
+                "rouge2": ROUGEScore(rouge_keys="rouge2")["rouge2_fmeasure"],
+                "rougeL": ROUGEScore(rouge_keys="rougeL")["rougeL_fmeasure"],
+                "rougeLsum": ROUGEScore(rouge_keys="rougeLsum")["rougeLsum_fmeasure"],
             }
         )
 
@@ -66,6 +70,9 @@ class CommitMessageGenerationModule(LightningModule):
                 "MRR_top5": MRR(top_k=5, shift=shift),
             }
         )
+        self.val_text_metrics = text_metrics.clone(prefix="val/")
+        self.test_text_metrics = text_metrics.clone(prefix="test/")
+
         self.train_metrics = metrics.clone(prefix="train/")
         self.val_metrics = metrics.clone(prefix="val/")
         self.test_metrics = metrics.clone(prefix="test/")
@@ -136,7 +143,7 @@ class CommitMessageGenerationModule(LightningModule):
             batch_size=batch_size,
         )
 
-        if split == "val":
+        if split in ["val", "test"]:
             # Convert logits to predictions
             token_preds = self.generate(batch)
             text_results = self._postprocess_generated(batch, token_preds)
@@ -144,16 +151,15 @@ class CommitMessageGenerationModule(LightningModule):
             inputs, preds = zip(
                 *[(result["input"], result["prediction"]) for result in text_results]
             )
-            bleu_scores = self.text_metrics["bleu"](preds, inputs)
-            self.log(
-                "val/bleu",
-                bleu_scores,
+            text_metric = getattr(self, f"{split}_text_metrics")
+            text_metric(preds, inputs)
+            self.log_dict(
+                text_metric,
                 on_step=False,
                 on_epoch=True,
                 prog_bar=True,
                 batch_size=batch_size,
             )
-
         # Here, we basically randomly save a batch
         # When epoch ends, we'll run this batch data through our model to generate text (in inference mode).
         # This is solely used for logging/visualization, so that we know how the model is currently generating text.

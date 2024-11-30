@@ -1,3 +1,22 @@
+# Copyright The Lightning team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# referenced from
+# Library Name: torchtext
+# Authors: torchtext authors and @sluks
+# Date: 2020-07-18
+# Link: https://pytorch.org/text/_modules/torchtext/data/metrics.html#bleu_score
 from collections.abc import Sequence
 from typing import Any, Optional, Union
 
@@ -36,13 +55,12 @@ class SacreBLEUScore(BLEUScore):
         tokenize: Tokenization technique to be used. Choose between ``'none'``, ``'13a'``, ``'zh'``, ``'intl'``,
             ``'char'``, ``'ja-mecab'``, ``'ko-mecab'``, ``'flores101'`` and ``'flores200'``.
         lowercase:  If ``True``, BLEU score over lowercased text is calculated.
-        kwargs: Additional keyword arguments, see 'Metric kwargs' for more info.
+        kwargs: Additional keyword arguments, see Metric kwargs for more info.
         weights:
             Weights used for unigrams, bigrams, etc. to calculate BLEU score.
             If not provided, uniform weights are used.
 
     Raises:
-
         ValueError:
             If ``tokenize`` not one of 'none', '13a', 'zh', 'intl' or 'char'
         ValueError:
@@ -71,10 +89,10 @@ class SacreBLEUScore(BLEUScore):
 
     def __init__(
         self,
-        n_gram: int = 1,
+        n_gram: int = 4,
         smooth: bool = False,
         tokenize: _TokenizersLiteral = "13a",
-        lowercase: bool = True,
+        lowercase: bool = False,
         weights: Optional[Sequence[float]] = None,
         **kwargs: Any,
     ) -> None:
@@ -97,9 +115,7 @@ class SacreBLEUScore(BLEUScore):
     def plot(
         self, val: Optional[Union[Tensor, Sequence[Tensor]]] = None, ax: Optional[_AX_TYPE] = None
     ) -> _PLOT_OUT_TYPE:
-        """Generate visualization plot.
-
-        Creates a visualization of the BLEU score trends.
+        """Plot a single or multiple values from the metric.
 
         Args:
             val: Either a single result from calling `metric.forward` or `metric.compute` or a list of these results.
@@ -107,29 +123,14 @@ class SacreBLEUScore(BLEUScore):
             ax: An matplotlib axis object. If provided will add plot to that axis
 
         Returns:
-            matplotlib.figure.Figure and matplotlib.axes.Axes: The generated plot
+            Figure and Axes object
 
         Raises:
             ModuleNotFoundError:
                 If `matplotlib` is not installed
 
         Example:
-            >>> # Example plotting a single value
-            >>> from torchmetrics.text import SacreBLEUScore
-            >>> metric = SacreBLEUScore()
-            >>> preds = ['the cat is on the mat']
-            >>> target = [['there is a cat on the mat', 'a cat is on the mat']]
-            >>> metric.update(preds, target)
-            >>> figure, axes = metric.plot()
-
-            >>> # Example plotting multiple values
-            >>> from torchmetrics.text import SacreBLEUScore
-            >>> metric = SacreBLEUScore()
-            >>> preds = ['the cat is on the mat']
-            >>> target = [['there is a cat on the mat', 'a cat is on the mat']]
-            >>> values = [ ]
-            >>> for _ in range(10):
-            ...     values.append(metric(preds, target))
-            >>> figure, axes = metric.plot(values)
+            >>> import matplotlib.pyplot as plt
+            >>> plt.plot([1, 2, 3])
         """
         return self._plot(val, ax)
