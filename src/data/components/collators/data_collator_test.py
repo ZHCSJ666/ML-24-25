@@ -14,22 +14,15 @@ from .base_collator_utils import BaseCollatorUtils
 class DataCollatorTest(BaseCollatorUtils):
     """This class is used to construct batches out of lists of examples in evaluation setting.
 
-    There is an option to add message history to decoder context
-    (but if history is used as encoder input, it will be ignored).
-
-    Also, we can emulate completion workflow by adding X% of characters of each message
+    We can emulate completion workflow by adding X% of characters of each message
     to decoder context.
 
-    - Format with history: `[BOS] history_1 [SEP] ... history_k [SEP] X% characters of message`
-
-    - Format without history: `[BOS] X% characters of message`
+    Format: `[BOS] X% characters of message`
 
     Attributes:
         context_ratio: (context_ratio * 100)% of characters of each message will
          be added to decoder context (should be a float between 0.0 and 1.0).
-        max_new_tokens: A maximum number of generated tokens during generation. History is added in a way that
-          resulting tensor has 2nd dimension <= `decoder_context_max_len` - `max_new_tokens`
-          (but this restriction is not applied to input message, it can still be up to `decoder_context_max_len` long).
+        max_new_tokens: A maximum number of generated tokens during generation.
     """
 
     diff_tokenizer: PreTrainedTokenizerFast
@@ -89,9 +82,8 @@ class DataCollatorTest(BaseCollatorUtils):
         """Process the input examples into decoder input on evaluation stage.
 
         The input examples are processed as follows:
-            * The message input ids and history input ids for each example are extracted.
+            * The message input ids for each example are extracted.
             * Messages are processed for generation according to context ratio configuration.
-            * History messages are added to the input based on the configuration.
             * Inputs are padded to the maximum length in the batch and converted to tensors.
 
         Args:
@@ -105,7 +97,6 @@ class DataCollatorTest(BaseCollatorUtils):
                 A list of prefix strings for each example.
         """
         message_inputs: List[List[int]] = [example.msg_input_ids for example in examples]
-        history_inputs: List[List[List[int]]] = [example.history_input_ids for example in examples]
 
         all_msg_ids: List[torch.Tensor] = []
         all_msg_masks: List[torch.Tensor] = []
@@ -113,23 +104,15 @@ class DataCollatorTest(BaseCollatorUtils):
         all_msg_targets: List[str] = []
         all_msg_prefixes: List[str] = []
 
-        for message_ids, history_ids in zip(message_inputs, history_inputs):
+        for message_ids in message_inputs:
             message_ids = message_ids[: self.decoder_context_max_len - 1]
-            cur_len = len(message_ids) + 1 + self.max_new_tokens
             message_ids, target, prefix = self._process_msg_gen(message_ids)
-
-            cur_history_ids = []
-            if self.encoder_input_type != "history" and self.with_history:
-                cur_history_ids = self._get_history(
-                    cur_len=cur_len,
-                    history_ids=history_ids,
-                )
 
             if self.decoder_start_token_id is None:
                 start_token_id = self.msg_bos_token_id
             else:
                 start_token_id = self.decoder_start_token_id
-            cur_ids = [[start_token_id]] + cur_history_ids + [message_ids]
+            cur_ids = [[start_token_id]] + [message_ids]
             cur_ids_tensor = torch.tensor(
                 [ex for sublist in cur_ids for ex in sublist], dtype=torch.int64
             )

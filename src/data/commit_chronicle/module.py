@@ -19,7 +19,7 @@ from src.data.types import SingleExample
 class CommitChronicleDataModule(LightningDataModule):
     """`LightningDataModule` for the Commit Chronicle dataset.
 
-    This is the dataset for commit message generation (and/or completion), introduced in the paper
+    This is the dataset for commit message generation, introduced in the paper
     "From Commit Message Generation to History-Aware Commit Message Completion", ASE 2023.
 
     Read the docs:
@@ -39,13 +39,10 @@ class CommitChronicleDataModule(LightningDataModule):
         shift_labels: bool = True,
         decoder_start_token_id=-1,
         # input configuration
-        encoder_input_type: Literal["diff", "history"] = "diff",
-        train_with_history: bool = False,
-        generate_with_history: bool = False,
+        encoder_input_type: Literal["diff"] = "diff",
         context_ratio: float = 0.0,
         line_sep: str = "\n",
         # preprocessing
-        add_history_to_inputs: bool = False,
         use_cache: bool = True,
         # data loader stuff
         batch_size: int = 16,
@@ -64,8 +61,6 @@ class CommitChronicleDataModule(LightningDataModule):
             msg_tokenizer:
             diff_max_len: Maximum length for input git commit diff.
             msg_max_len: Maximum length for commit message.
-            add_history_to_inputs: True to save history for each input example,
-                False to load history in RAM and build inputs on the fly.
             line_sep: Newline separator used in data (should be the same for diffs and messages).
             use_cache: True to look for preprocessed files, False to relaunch preprocessing even if preprocessed files are present.
 
@@ -73,9 +68,7 @@ class CommitChronicleDataModule(LightningDataModule):
             num_workers: The number of workers. Defaults to `0`.
             pin_memory: Whether to pin memory. Defaults to `False`.
             shift_labels: Should be True most times, except when using a decoder-only model
-            encoder_input_type: What type of input will be passed to encoder. Currently, `history` and `diff` are supported.
-            train_with_history: `True` to concatenate commit message history with current commit message in decoder
-                context during training, `False` otherwise (ignored when `encoder_input_type` is `history`).
+            encoder_input_type: What type of input will be passed to encoder. Currently only `diff` is supported.
         """
         super().__init__()
 
@@ -91,7 +84,6 @@ class CommitChronicleDataModule(LightningDataModule):
             diff_line_sep=line_sep,
             change_types=change_types,
             diff_max_len=diff_max_len,
-            add_history_to_inputs=add_history_to_inputs,
             msg_max_len=msg_max_len,
         )
         self.data_train: Optional[Dataset] = None
@@ -158,7 +150,6 @@ class CommitChronicleDataModule(LightningDataModule):
                 encoder_input_type=self.hparams.encoder_input_type,
                 encoder_context_max_len=self.hparams.diff_max_len,
                 decoder_context_max_len=self.hparams.msg_max_len,
-                with_history=self.hparams.train_with_history,
                 shift_labels=self.hparams.shift_labels,
                 decoder_start_token_id=self.msg_tokenizer.bos_token_id,
             )
@@ -175,7 +166,6 @@ class CommitChronicleDataModule(LightningDataModule):
                 encoder_input_type=self.hparams.encoder_input_type,
                 encoder_context_max_len=self.hparams.diff_max_len,
                 decoder_context_max_len=self.hparams.msg_max_len,
-                with_history=self.hparams.generate_with_history,
                 context_ratio=self.hparams.context_ratio,
                 decoder_start_token_id=self.hparams.decoder_start_token_id,
             )
@@ -245,7 +235,6 @@ class CommitChronicleDataset(torch.utils.data.Dataset):
         return SingleExample(
             diff_input_ids=row["diff_input_ids"],
             msg_input_ids=row["msg_input_ids"],
-            history_input_ids=row.get("history_input_ids"),
             pos_in_file=row.get("pos_in_file"),
         )
 
