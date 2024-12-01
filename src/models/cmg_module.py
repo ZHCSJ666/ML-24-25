@@ -11,6 +11,8 @@ from transformers.modeling_outputs import Seq2SeqLMOutput
 
 from src.data.types import Batch, BatchTest, BatchTrain
 from src.metrics import MRR, Accuracy
+from src.metrics.bleu import SacreBLEUScore
+from src.metrics.rouge import ROUGEScore
 from src.models.components.encoder_decoder import EncoderDecoder
 
 
@@ -50,8 +52,17 @@ class CommitMessageGenerationModule(LightningModule):
 
         self.net = net
 
-        # We'd add string-based metrics like BLEU, ROUGE later.
-        # For now, we are using tensor-based metrics
+        text_metrics = MetricCollection(
+            {
+                "sacre_bleu1": SacreBLEUScore(n_gram=1),
+                "sacre_bleu4": SacreBLEUScore(n_gram=4),
+                "rouge1": ROUGEScore(rouge_keys="rouge1")["rouge1_fmeasure"],
+                "rouge2": ROUGEScore(rouge_keys="rouge2")["rouge2_fmeasure"],
+                "rougeL": ROUGEScore(rouge_keys="rougeL")["rougeL_fmeasure"],
+                "rougeLsum": ROUGEScore(rouge_keys="rougeLsum")["rougeLsum_fmeasure"],
+            }
+        )
+
         metrics = MetricCollection(
             {
                 "acc_top1": Accuracy(top_k=1, shift=shift),
@@ -59,6 +70,9 @@ class CommitMessageGenerationModule(LightningModule):
                 "MRR_top5": MRR(top_k=5, shift=shift),
             }
         )
+        self.val_text_metrics = text_metrics.clone(prefix="val/")
+        self.test_text_metrics = text_metrics.clone(prefix="test/")
+
         self.train_metrics = metrics.clone(prefix="train/")
         self.val_metrics = metrics.clone(prefix="val/")
         self.test_metrics = metrics.clone(prefix="test/")
@@ -71,6 +85,14 @@ class CommitMessageGenerationModule(LightningModule):
         self.val_batch: Optional[BatchTrain] = None
 
     def forward(self, batch: Batch) -> Any:
+        """Forward pass of the model.
+
+        Args:
+            batch: Input batch containing source and target sequences.
+
+        Returns:
+            dict: Dictionary containing model outputs including logits and predictions.
+        """
         return self.net(batch)
 
     def on_train_start(self) -> None:
@@ -96,7 +118,7 @@ class CommitMessageGenerationModule(LightningModule):
         else:
             logits = outputs
             loss = self.criterion(
-                outputs.permute(0, 2, 1), batch.labels
+                logits.permute(0, 2, 1), batch.labels
             )  # Shape of both: (batch, seq_len, vocab_size), as Pytorch expects
         result["loss"] = loss
         batch_size = len(batch.encoder_input_ids)
@@ -121,6 +143,23 @@ class CommitMessageGenerationModule(LightningModule):
             batch_size=batch_size,
         )
 
+        if split in ["val", "test"]:
+            # Convert logits to predictions
+            token_preds = self.generate(batch)
+            text_results = self._postprocess_generated(batch, token_preds)
+            # the text_results is a list of dicts with two keys: 'input' and 'prediction'
+            inputs, preds = zip(
+                *[(result["input"], result["prediction"]) for result in text_results]
+            )
+            text_metric = getattr(self, f"{split}_text_metrics")
+            text_metric(preds, inputs)
+            self.log_dict(
+                text_metric,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                batch_size=batch_size,
+            )
         # Here, we basically randomly save a batch
         # When epoch ends, we'll run this batch data through our model to generate text (in inference mode).
         # This is solely used for logging/visualization, so that we know how the model is currently generating text.
@@ -139,6 +178,14 @@ class CommitMessageGenerationModule(LightningModule):
 
     @torch.no_grad()
     def common_on_epoch_end(self, split) -> None:
+        """Common operations to perform at the end of each epoch.
+
+        Args:
+            split: String indicating the current stage ('train', 'val', or 'test').
+
+        Returns:
+            dict: Dictionary containing aggregated metrics for the epoch.
+        """
         # if split == "val":
         #     batch = self.val_batch
         # else:
@@ -181,6 +228,15 @@ class CommitMessageGenerationModule(LightningModule):
         self.log_results("test/", string_results)
 
     def generate(self, batch: Batch, **kwargs) -> Any:
+        """Generate commit messages for given source sequences.
+
+        Args:
+            batch: Input batch containing source and target sequences.
+            **kwargs: Additional keyword arguments passed to the generation method.
+
+        Returns:
+            torch.Tensor: Generated sequence token IDs.
+        """
         kwargs = kwargs or self.hparams.generation_kwargs or {}
 
         if isinstance(self.net, EncoderDecoder):
@@ -220,9 +276,25 @@ class CommitMessageGenerationModule(LightningModule):
         ]
 
     def decode_src(self, *args, **kwargs):
+        """Decode source sequence IDs back to text.
+
+        Args:
+            ids: Tensor of token IDs representing the source sequence.
+
+        Returns:
+            str: Decoded source text.
+        """
         return tuple(self.diff_tokenizer.batch_decode(arg, **kwargs) for arg in args)
 
     def decode_tgt(self, *args, **kwargs):
+        """Decode target sequence IDs back to text.
+
+        Args:
+            ids: Tensor of token IDs representing the target sequence.
+
+        Returns:
+            str: Decoded target text.
+        """
         return tuple(self.msg_tokenizer.batch_decode(arg, **kwargs) for arg in args)
 
     def on_train_epoch_end(self) -> None:
