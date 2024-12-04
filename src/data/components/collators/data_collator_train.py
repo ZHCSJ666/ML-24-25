@@ -14,12 +14,7 @@ class DataCollatorTrain(BaseCollatorUtils):
     """This class is used to construct batches out of lists of examples in training/validation
     setting.
 
-    There is an option to add message history to decoder context
-    (but if history is used as encoder input, it will be ignored).
-
-    - Format with history: `[BOS] history_1 [SEP] ... history_k [SEP] message [EOS]`
-
-    - Format without history: `[BOS] message [EOS]`
+    Format: `[BOS] message [EOS]`
 
     Attributes:
         shift_labels: True to mimic transformers' seq2seq models ids/labels construction logic, False otherwise
@@ -37,8 +32,7 @@ class DataCollatorTrain(BaseCollatorUtils):
 
         Starting from transformers v4.12, loss is now calculated in EncoderDecoderModel, not in
         decoder class. Also, decoder input ids are created automatically based on labels: labels
-        are shifted and -100 is replaced with pad token. In our case, history ids are masked -100
-        in labels, but they are still meaningful ids. Therefore, we can't use the default approach.
+        are shifted and -100 is replaced with pad token.
         """
         if self.decoder_start_token_id is None:
             ids = [[self.msg_bos_token_id]] + ids[:-1]
@@ -51,8 +45,7 @@ class DataCollatorTrain(BaseCollatorUtils):
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Prepares decoder input for train/validation:
 
-          * aggregates messages from history when configured accordingly
-          * concatenates history with current message
+          * constructs message input with special tokens
           * constructs labels
           * pads, converts to tensors
 
@@ -63,37 +56,16 @@ class DataCollatorTrain(BaseCollatorUtils):
             Tuple of three tensors: input ids, attention masks, labels.
         """
         message_inputs: List[List[int]] = [example.msg_input_ids for example in examples]
-        history_inputs: List[List[List[int]]] = [example.history_input_ids for example in examples]
 
         all_msg_ids: List[torch.Tensor] = []
         all_msg_masks: List[torch.Tensor] = []
         all_msg_labels: List[torch.Tensor] = []
 
-        for message_ids, history_ids in zip(message_inputs, history_inputs):
+        for message_ids in message_inputs:
             message_ids = message_ids[: self.decoder_context_max_len - 2]
 
-            cur_history_ids = []
-            cur_history_labels = []
-
-            if self.encoder_input_type != "history" and self.with_history:
-                cur_history_ids = self._get_history(
-                    cur_len=len(message_ids) + 2,
-                    history_ids=history_ids,
-                )
-                cur_history_labels = [[-100 for _ in message] for message in cur_history_ids]
-
-            cur_ids = (
-                [[self.msg_bos_token_id]]
-                + cur_history_ids
-                + [message_ids]
-                + [[self.msg_eos_token_id]]
-            )
-            cur_labels = (
-                [[self.msg_bos_token_id]]
-                + cur_history_labels
-                + [message_ids]
-                + [[self.msg_eos_token_id]]
-            )
+            cur_ids = [[self.msg_bos_token_id]] + [message_ids] + [[self.msg_eos_token_id]]
+            cur_labels = [[self.msg_bos_token_id]] + [message_ids] + [[self.msg_eos_token_id]]
 
             if self.shift_labels:
                 cur_ids, cur_labels = self._shift_for_encoder_decoder(cur_ids, cur_labels)
