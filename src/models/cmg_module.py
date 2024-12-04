@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from lightning import LightningModule
 from lightning.pytorch.loggers.tensorboard import TensorBoardLogger
+from lightning.pytorch.loggers.wandb import WandbLogger
 from torchmetrics import MetricCollection
 from transformers import PreTrainedTokenizerFast
 from transformers.modeling_outputs import Seq2SeqLMOutput
@@ -30,6 +31,7 @@ class CommitMessageGenerationModule(LightningModule):
         scheduler: Optional[Callable[..., torch.optim.lr_scheduler]] = None,
         compile: bool = False,
         shift: bool = False,
+        val_text_metrics_every_step: bool = False,
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Initialize a `CommitMessageGenerationModule`.
@@ -62,6 +64,9 @@ class CommitMessageGenerationModule(LightningModule):
                 "rougeLsum": ROUGEScore(rouge_keys="rougeLsum")["rougeLsum_fmeasure"],
             }
         )
+        self.train_text_metrics = text_metrics.clone(prefix="train/")
+        self.val_text_metrics = text_metrics.clone(prefix="val/")
+        self.test_text_metrics = text_metrics.clone(prefix="test/")
 
         metrics = MetricCollection(
             {
@@ -70,9 +75,6 @@ class CommitMessageGenerationModule(LightningModule):
                 "MRR_top5": MRR(top_k=5, shift=shift),
             }
         )
-        self.val_text_metrics = text_metrics.clone(prefix="val/")
-        self.test_text_metrics = text_metrics.clone(prefix="test/")
-
         self.train_metrics = metrics.clone(prefix="train/")
         self.val_metrics = metrics.clone(prefix="val/")
         self.test_metrics = metrics.clone(prefix="test/")
@@ -120,7 +122,7 @@ class CommitMessageGenerationModule(LightningModule):
             loss = self.criterion(
                 logits.permute(0, 2, 1), batch.labels
             )  # Shape of both: (batch, seq_len, vocab_size), as Pytorch expects
-        result["loss"] = loss
+        result["loss"] = None if torch.isnan(loss).any() or torch.isnan(logits).any() else loss
         batch_size = len(batch.encoder_input_ids)
         self.log(
             f"{split}/loss",
@@ -143,23 +145,9 @@ class CommitMessageGenerationModule(LightningModule):
             batch_size=batch_size,
         )
 
-        if split in ["val", "test"]:
-            # Convert logits to predictions
-            token_preds = self.generate(batch)
-            text_results = self._postprocess_generated(batch, token_preds)
-            # the text_results is a list of dicts with two keys: 'input' and 'prediction'
-            inputs, preds = zip(
-                *[(result["input"], result["prediction"]) for result in text_results]
-            )
-            text_metric = getattr(self, f"{split}_text_metrics")
-            text_metric(preds, inputs)
-            self.log_dict(
-                text_metric,
-                on_step=False,
-                on_epoch=True,
-                prog_bar=True,
-                batch_size=batch_size,
-            )
+        if self.hparams.val_text_metrics_every_step and split in ["val"]:
+            self.generate_text_and_compute_metrics(batch, split, log_text=False)
+
         # Here, we basically randomly save a batch
         # When epoch ends, we'll run this batch data through our model to generate text (in inference mode).
         # This is solely used for logging/visualization, so that we know how the model is currently generating text.
@@ -167,43 +155,7 @@ class CommitMessageGenerationModule(LightningModule):
         if saved_batch is None or random.random() > 0.5:  # nosec B311
             setattr(self, f"{split}_batch", batch)
 
-        if split == "train":
-            if self.train_batch is None or random.random() > 0.5:  # nosec B311
-                self.train_batch = batch
-        elif split == "val":
-            if self.val_batch is None or random.random() > 0.5:  # nosec B311
-                self.val_batch = batch
-
         return result
-
-    @torch.no_grad()
-    def common_on_epoch_end(self, split) -> None:
-        """Common operations to perform at the end of each epoch.
-
-        Args:
-            split: String indicating the current stage ('train', 'val', or 'test').
-
-        Returns:
-            dict: Dictionary containing aggregated metrics for the epoch.
-        """
-        # if split == "val":
-        #     batch = self.val_batch
-        # else:
-        #     batch = self.train_batch
-        batch = getattr(self, f"{split}_batch")
-        if batch is None:
-            return
-
-        # generate predictions
-        self.net.eval()
-        predictions = self.generate(batch)
-
-        # decode & postprocess data & log results
-        string_results = self._postprocess_generated(batch, predictions)
-        self.log_results(f"{split}/", string_results)
-
-        self.net.train()
-        setattr(self, f"{split}_batch", None)
 
     def training_step(self, batch: BatchTrain, batch_idx: int) -> Dict[str, Any]:
         """Training step.
@@ -213,7 +165,7 @@ class CommitMessageGenerationModule(LightningModule):
         :return: Dictionary containing the loss.
         """
         result = self.common_step(batch, "train")
-        return {"loss": result["loss"]}
+        return result.get("loss")
 
     def test_step(self, batch: BatchTest, batch_idx: int) -> None:
         """Test step.
@@ -221,11 +173,129 @@ class CommitMessageGenerationModule(LightningModule):
         :param batch: A test batch.
         :param batch_idx: Index of the batch.
         """
+        self.generate_text_and_compute_metrics(batch, "test")
+
+    def on_train_epoch_end(self) -> None:
+        """Lightning hook that is called when a training epoch ends."""
+        self.generate_text_and_compute_metrics(self.train_batch, "train")
+        self.train_batch = None
+
+    def validation_step(self, batch: BatchTrain, batch_idx: int) -> None:
+        """Validation step.
+
+        :param batch: A validation batch.
+        :param batch_idx: Index of the batch.
+        """
+        self.common_step(batch, "val")
+
+    def on_validation_epoch_end(self) -> None:
+        """Lightning hook that is called when a validation epoch ends."""
+        # if we are not using text metrics on every step, then we can do it here
+        if not self.hparams.val_text_metrics_every_step:
+            self.generate_text_and_compute_metrics(self.val_batch, "val")
+        self.val_batch = None
+
+    def setup(self, stage: str) -> None:
+        """Lightning hook that is called at the beginning of fit (train + validate), validate,
+        test, or predict.
+
+        This is a good hook when you need to build models dynamically or adjust something about
+        them. This hook is called on every process when using DDP.
+
+        :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
+        """
+
+        if self.msg_tokenizer is None or self.diff_tokenizer is None:
+            datamodule = self.trainer.datamodule
+            self.msg_tokenizer = datamodule.msg_tokenizer
+            self.diff_tokenizer = datamodule.diff_tokenizer
+
+        if not isinstance(self.net, nn.Module):
+            self.net = self.hparams.net(
+                encoder_vocab_size=self.diff_tokenizer.vocab_size,
+                decoder_vocab_size=self.msg_tokenizer.vocab_size,
+            )
+
+        if self.hparams.compile and stage == "fit":
+            self.net = torch.compile(self.net)
+
+    def configure_optimizers(self) -> Dict[str, Any]:
+        """Choose what optimizers and learning-rate schedulers to use in your optimization.
+        Normally you'd need one. But in the case of GANs or similar you might have multiple.
+
+        Examples:
+            https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#configure-optimizers
+
+        :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
+        """
+        try:
+            optimizer = self.hparams.optimizer(self.trainer.model.parameters())
+        except AttributeError:
+            # to make optimizer creation with src.optimizers.create_optimizer work
+            optimizer = self.hparams.optimizer(self.trainer.model)
+        if self.hparams.scheduler is not None:
+            scheduler = self.hparams.scheduler(
+                optimizer=optimizer,
+                max_decay_steps=self.trainer.estimated_stepping_batches,
+            )
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "monitor": "val/loss",
+                    "interval": "epoch",
+                    "frequency": 1,
+                },
+            }
+        return {"optimizer": optimizer}
+
+    @torch.no_grad()
+    def generate_text_and_compute_metrics(
+        self, batch: Batch, split, log_text: bool = True
+    ) -> None:
+        """Common operations to perform at the end of each epoch.
+
+        Args:
+            batch:
+            split: String indicating the current stage ('train', 'val', or 'test').
+            log_text:
+
+        Returns:
+            dict: Dictionary containing aggregated metrics for the epoch.
+        """
+
+        if batch is None:
+            return
+        is_train = self.net.training
+        if is_train:
+            self.net.eval()
+
+        # obtain metric object
+        text_metric: MetricCollection = getattr(self, f"{split}_text_metrics")
+
+        # generate predictions
         predictions = self.generate(batch)
 
-        # decode & postprocess data
+        # decode & postprocess data & log results
         string_results = self._postprocess_generated(batch, predictions)
-        self.log_results("test/", string_results)
+        if log_text:
+            self.log_text(text_metric.prefix, string_results)
+
+        # compute metrics
+        inputs, preds = zip(
+            *[(result["input"], result["prediction"]) for result in string_results]
+        )
+        text_metric(preds, inputs)
+        self.log_dict(
+            text_metric,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            batch_size=len(batch.encoder_input_ids),
+        )
+
+        if is_train:
+            self.net.train()
 
     def generate(self, batch: Batch, **kwargs) -> Any:
         """Generate commit messages for given source sequences.
@@ -267,13 +337,36 @@ class CommitMessageGenerationModule(LightningModule):
         decoded_inputs = self.decode_src(batch.encoder_input_ids, skip_special_tokens=True)[0]
         decoded_preds = self.decode_tgt(predictions, skip_special_tokens=True)[0]
 
-        return [
-            {
+        # TODO: decode ground truth
+        # if batch.labels is not None:
+        #     targets = batch.labels
+        # elif isinstance(batch, BatchTest) and batch.targets is not None:
+        #     targets = batch.targets
+        # else:
+        #     targets = None
+        #
+        # if targets is not None:
+        #     targets = targets.clone()
+        #     targets[targets == -100] = self.msg_tokenizer.pad_token_id
+        #     decoded_targets = self.decode_tgt(targets, skip_special_tokens=True)[0]
+        # else:
+        #     decoded_targets = [None for _ in range(len(batch.encoder_input_ids))]
+        decoded_targets = [None for _ in range(len(batch.encoder_input_ids))]
+        results = []
+
+        for (
+            input_,
+            pred,
+            target,
+        ) in zip(decoded_inputs, decoded_preds, decoded_targets):
+            item = {
                 "input": input_,
                 "prediction": pred,
             }
-            for input_, pred, in zip(decoded_inputs, decoded_preds)
-        ]
+            if target is not None:
+                item["target"] = target
+            results.append(item)
+        return results
 
     def decode_src(self, *args, **kwargs):
         """Decode source sequence IDs back to text.
@@ -297,78 +390,16 @@ class CommitMessageGenerationModule(LightningModule):
         """
         return tuple(self.msg_tokenizer.batch_decode(arg, **kwargs) for arg in args)
 
-    def on_train_epoch_end(self) -> None:
-        """Lightning hook that is called when a training epoch ends."""
-        self.common_on_epoch_end("train")
-
-    def validation_step(self, batch: BatchTrain, batch_idx: int) -> None:
-        """Validation step.
-
-        :param batch: A validation batch.
-        :param batch_idx: Index of the batch.
-        """
-        self.common_step(batch, "val")
-
-    def on_validation_epoch_end(self) -> None:
-        """Lightning hook that is called when a validation epoch ends."""
-        self.common_on_epoch_end("val")
-
-    def on_test_epoch_end(self) -> None:
-        """Lightning hook that is called when a test epoch ends."""
-        pass
-
-    def setup(self, stage: str) -> None:
-        """Lightning hook that is called at the beginning of fit (train + validate), validate,
-        test, or predict.
-
-        This is a good hook when you need to build models dynamically or adjust something about
-        them. This hook is called on every process when using DDP.
-
-        :param stage: Either `"fit"`, `"validate"`, `"test"`, or `"predict"`.
-        """
-
-        if self.msg_tokenizer is None or self.diff_tokenizer is None:
-            datamodule = self.trainer.datamodule
-            self.msg_tokenizer = datamodule.msg_tokenizer
-            self.diff_tokenizer = datamodule.diff_tokenizer
-
-        if not isinstance(self.net, nn.Module):
-            self.net = self.hparams.net(
-                encoder_vocab_size=self.diff_tokenizer.vocab_size,
-                decoder_vocab_size=self.msg_tokenizer.vocab_size,
-            )
-
-        if self.hparams.compile and stage == "fit":
-            self.net = torch.compile(self.net)
-
-    def configure_optimizers(self) -> Dict[str, Any]:
-        """Choose what optimizers and learning-rate schedulers to use in your optimization.
-        Normally you'd need one. But in the case of GANs or similar you might have multiple.
-
-        Examples:
-            https://lightning.ai/docs/pytorch/latest/common/lightning_module.html#configure-optimizers
-
-        :return: A dict containing the configured optimizers and learning-rate schedulers to be used for training.
-        """
-        optimizer = self.hparams.optimizer(self.trainer.model.parameters())
-        if self.hparams.scheduler is not None:
-            scheduler = self.hparams.scheduler(optimizer=optimizer)
-            return {
-                "optimizer": optimizer,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "monitor": "val/loss",
-                    "interval": "epoch",
-                    "frequency": 1,
-                },
-            }
-        return {"optimizer": optimizer}
-
-    def log_results(self, prefix, results: List[Dict[str, str]], num_results: int = 4) -> None:
+    def log_text(self, prefix, results: List[Dict[str, str]], num_results: int = 4) -> None:
         """Log generated git commit message results.
 
-        This method only supports TensorBoard at the moment.
+        This method only supports TensorBoard and Wandb at the moment.
         """
+        random.shuffle(results)
+        self.log_text_tensorboard(prefix, results, num_results)
+        self.log_text_wandb(prefix, results, num_results)
+
+    def log_text_tensorboard(self, prefix, results: List[Dict[str, str]], num_results) -> None:
         tb_logger: Optional[TensorBoardLogger] = None
         for logger in self.loggers:
             if isinstance(logger, TensorBoardLogger):
@@ -378,10 +409,22 @@ class CommitMessageGenerationModule(LightningModule):
             return
 
         writer = tb_logger.experiment
-        random.shuffle(results)
         for result in results[:num_results]:
             for key, value in result.items():
                 writer.add_text(prefix + key, value, self.global_step)
+
+    def log_text_wandb(self, prefix, results: List[Dict[str, str]], num_results) -> None:
+        wandb_logger: Optional[WandbLogger] = None
+        for logger in self.loggers:
+            if isinstance(logger, WandbLogger):
+                wandb_logger = logger
+                break
+        if wandb_logger is None:
+            return
+
+        columns = list(results[0].keys())
+        data = [list(result.values()) for result in results[:num_results]]
+        wandb_logger.log_text(prefix + "text", columns=columns, data=data, step=self.global_step)
 
 
 if __name__ == "__main__":
