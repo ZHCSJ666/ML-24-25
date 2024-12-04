@@ -175,6 +175,7 @@ class CommitChronicleDataModule(LightningDataModule):
                 context_ratio=self.hparams.context_ratio,
                 decoder_start_token_id=self.hparams.decoder_start_token_id,
                 completion=self.hparams.completion,
+                split_ratio=self.hparams.split_ratio,
             )
 
     def train_dataloader(self) -> DataLoader[Any]:

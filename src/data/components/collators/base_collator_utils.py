@@ -108,14 +108,14 @@ class BaseCollatorUtils:
                 f"Encoder input type {self.encoder_input_type} is not supported"
             )
 
-        input_ids = [example["diff_input_ids"] for example in examples]
+        input_ids = [example.diff_input_ids for example in examples]
 
         if self.completion:
             msg_ids = [example["msg_input_ids"] for example in examples]
             for i, msg in enumerate(msg_ids):
                 split_idx = int(len(msg) * self.split_ratio)
                 partial_msg = msg[:split_idx]
-                examples[i]["msg_input_ids"] = msg[split_idx:]
+                examples[i].diff_input_ids = msg[split_idx:]
                 input_ids[i] = input_ids[i] + [self.msg_sep_token_id] + partial_msg
 
         return self._process_inputs(input_ids, are_messages=False)

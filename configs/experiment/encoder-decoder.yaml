@@ -44,8 +44,6 @@ model:
         - ${data.msg_tokenizer}
 
 data:
-  completion: false
-  split_ratio: 0.5
   batch_size: 16
   diff_max_len: ${model.net.encoder_context_max_len}
   msg_max_len: ${model.net.decoder_context_max_len}
