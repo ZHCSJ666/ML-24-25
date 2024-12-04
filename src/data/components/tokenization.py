@@ -18,12 +18,9 @@ def add_special_tokens(
 ) -> PreTrainedTokenizerFast:
     """Adds special tokens to tokenizer based on preprocessor configuration.
 
-    * sep_token is necessary for correct history construction.
     * pad_token is necessary for correct batch construction.
     * Several models employ additional special tokens in diffs representation.
     """
-    if not tokenizer.sep_token:  # type: ignore[attr-defined]
-        tokenizer.add_special_tokens({"sep_token": "[SEP]"})  # type: ignore[attr-defined]
     if not tokenizer.pad_token:  # type: ignore[attr-defined]
         tokenizer.add_special_tokens({"pad_token": "[PAD]"})  # type: ignore[attr-defined]
 
