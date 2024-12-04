@@ -1,7 +1,7 @@
 """Shamelessly lifted from https://github.com/JetBrains-Research/commit_message_generation"""
 
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 
 import torch
 
@@ -22,6 +22,9 @@ class BaseCollatorUtils:
           to construct encoder input.
     """
 
+    completion: bool
+    # Ratio of message to be used as prefix for chat completion
+    split_ratio: float
     msg_bos_token_id: int
     msg_eos_token_id: int
     msg_pad_token_id: int
@@ -68,7 +71,9 @@ class BaseCollatorUtils:
             pad_token_id = self.diff_pad_token_id
 
         inputs = [
-            [bos_token_id] + example[: self.encoder_context_max_len - 2] + [eos_token_id]
+            [bos_token_id]
+            + example[: self.encoder_context_max_len - 2]
+            + [eos_token_id]
             for example in inputs
         ]
         inputs_tensors = [torch.tensor(ids, dtype=torch.int64) for ids in inputs]
@@ -96,22 +101,27 @@ class BaseCollatorUtils:
         ]
         return torch.stack(inputs_tensors), torch.stack(masks_tensors)
 
-    def _process_encoder_input(
-        self, examples: List[SingleExample]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """A helper method to process encoder input.
+    def _process_encoder_input(self, examples: List[Dict[str, Any]]):
+        """Process encoder input (diffs and optionally partial messages)."""
+        if self.encoder_input_type != "diff":
+            raise ValueError(
+                f"Encoder input type {self.encoder_input_type} is not supported"
+            )
 
-        Only diff can be passed to encoder.
+        input_ids = [example["diff_input_ids"] for example in examples]
 
-        Args:
-            examples: A batch of examples from dataset.
+        if self.completion:
+            msg_ids = [example["msg_input_ids"] for example in examples]
+            for i, msg in enumerate(msg_ids):
+                split_idx = int(len(msg) * self.split_ratio)
+                partial_msg = msg[:split_idx]
+                examples[i]["msg_input_ids"] = msg[split_idx:]
+                input_ids[i] = input_ids[i] + [self.msg_sep_token_id] + partial_msg
 
-        Returns:
-            input_ids for encoder, attention_mask for encoder
-        """
-        if self.encoder_input_type == "diff":
-            diff_inputs: List[List[int]] = [example.diff_input_ids for example in examples]
-            results = self._process_inputs(diff_inputs)
-        else:
-            raise ValueError("Unknown encoder input type")
-        return results
+        return self._process_inputs(input_ids, are_messages=False)
+
+    def _process_decoder_input(self, examples: List[Dict[str, Any]]):
+        """Process decoder input (messages).
+        In completion mode, only the remaining part of message is used as target."""
+        input_ids = [example["msg_input_ids"] for example in examples]
+        return self._process_inputs(input_ids, are_messages=True)

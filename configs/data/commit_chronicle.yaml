@@ -11,6 +11,9 @@ msg_tokenizer:
   _target_: src.data.components.tokenization.load_tokenizer
   name_or_path: ???
 
+completion: ???
+split_ratio: ???
+
 # decoder_start_token_id: ???
 
 diff_max_len: ???
