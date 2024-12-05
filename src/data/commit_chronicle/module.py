@@ -29,6 +29,8 @@ class CommitChronicleDataModule(LightningDataModule):
 
     def __init__(
         self,
+        completion: bool = False,
+        split_ratio: float = 0.5,
         data_dir: str = "data/datasets/commit-chronicle",
         languages: List[str] = ["Go"],
         change_types: List[str] = ["ADD"],
@@ -126,7 +128,9 @@ class CommitChronicleDataModule(LightningDataModule):
                 raise RuntimeError(
                     f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
                 )
-            self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
+            self.batch_size_per_device = (
+                self.hparams.batch_size // self.trainer.world_size
+            )
 
         def create_dataset(split):
             path = self.processor.processed_path_for(Path(self.hparams.data_dir), split)
@@ -152,6 +156,8 @@ class CommitChronicleDataModule(LightningDataModule):
                 decoder_context_max_len=self.hparams.msg_max_len,
                 shift_labels=self.hparams.shift_labels,
                 decoder_start_token_id=self.msg_tokenizer.bos_token_id,
+                completion=self.hparams.completion,
+                split_ratio=self.hparams.split_ratio,
             )
             self.test_collator = DataCollatorTest(
                 diff_bos_token_id=self.diff_tokenizer.bos_token_id,  # type: ignore[attr-defined]
@@ -168,6 +174,8 @@ class CommitChronicleDataModule(LightningDataModule):
                 decoder_context_max_len=self.hparams.msg_max_len,
                 context_ratio=self.hparams.context_ratio,
                 decoder_start_token_id=self.hparams.decoder_start_token_id,
+                completion=self.hparams.completion,
+                split_ratio=self.hparams.split_ratio,
             )
 
     def train_dataloader(self) -> DataLoader[Any]:
@@ -179,7 +187,8 @@ class CommitChronicleDataModule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             shuffle=True,
             collate_fn=self.train_val_collator,
-            persistent_workers=self.hparams.persistent_workers and self.hparams.num_workers > 0,
+            persistent_workers=self.hparams.persistent_workers
+            and self.hparams.num_workers > 0,
         )
 
     def val_dataloader(self) -> DataLoader[Any]:
@@ -191,7 +200,8 @@ class CommitChronicleDataModule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
             collate_fn=self.train_val_collator,
-            persistent_workers=self.hparams.persistent_workers and self.hparams.num_workers > 0,
+            persistent_workers=self.hparams.persistent_workers
+            and self.hparams.num_workers > 0,
         )
 
     def test_dataloader(self) -> DataLoader[Any]:
@@ -203,7 +213,8 @@ class CommitChronicleDataModule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
             collate_fn=self.test_collator,
-            persistent_workers=self.hparams.persistent_workers and self.hparams.num_workers > 0,
+            persistent_workers=self.hparams.persistent_workers
+            and self.hparams.num_workers > 0,
         )
 
 

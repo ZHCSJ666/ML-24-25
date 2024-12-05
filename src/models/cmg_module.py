@@ -50,7 +50,9 @@ class CommitMessageGenerationModule(LightningModule):
         self.save_hyperparameters(
             logger=False, ignore=["net"] if isinstance(net, nn.Module) else []
         )
-        self.criterion = nn.NLLLoss(ignore_index=-100)  # Updated to ignore padding tokens
+        self.criterion = nn.NLLLoss(
+            ignore_index=-100
+        )  # Updated to ignore padding tokens
 
         self.net = net
 
@@ -122,7 +124,9 @@ class CommitMessageGenerationModule(LightningModule):
             loss = self.criterion(
                 logits.permute(0, 2, 1), batch.labels
             )  # Shape of both: (batch, seq_len, vocab_size), as Pytorch expects
-        result["loss"] = None if torch.isnan(loss).any() or torch.isnan(logits).any() else loss
+        result["loss"] = (
+            None if torch.isnan(loss).any() or torch.isnan(logits).any() else loss
+        )
         batch_size = len(batch.encoder_input_ids)
         self.log(
             f"{split}/loss",
@@ -334,7 +338,9 @@ class CommitMessageGenerationModule(LightningModule):
         Returns:
             A dict with decoded sources/predictions.
         """
-        decoded_inputs = self.decode_src(batch.encoder_input_ids, skip_special_tokens=True)[0]
+        decoded_inputs = self.decode_src(
+            batch.encoder_input_ids, skip_special_tokens=True
+        )[0]
         decoded_preds = self.decode_tgt(predictions, skip_special_tokens=True)[0]
 
         # TODO: decode ground truth
@@ -390,7 +396,9 @@ class CommitMessageGenerationModule(LightningModule):
         """
         return tuple(self.msg_tokenizer.batch_decode(arg, **kwargs) for arg in args)
 
-    def log_text(self, prefix, results: List[Dict[str, str]], num_results: int = 4) -> None:
+    def log_text(
+        self, prefix, results: List[Dict[str, str]], num_results: int = 4
+    ) -> None:
         """Log generated git commit message results.
 
         This method only supports TensorBoard and Wandb at the moment.
@@ -399,7 +407,9 @@ class CommitMessageGenerationModule(LightningModule):
         self.log_text_tensorboard(prefix, results, num_results)
         self.log_text_wandb(prefix, results, num_results)
 
-    def log_text_tensorboard(self, prefix, results: List[Dict[str, str]], num_results) -> None:
+    def log_text_tensorboard(
+        self, prefix, results: List[Dict[str, str]], num_results
+    ) -> None:
         tb_logger: Optional[TensorBoardLogger] = None
         for logger in self.loggers:
             if isinstance(logger, TensorBoardLogger):
@@ -413,7 +423,9 @@ class CommitMessageGenerationModule(LightningModule):
             for key, value in result.items():
                 writer.add_text(prefix + key, value, self.global_step)
 
-    def log_text_wandb(self, prefix, results: List[Dict[str, str]], num_results) -> None:
+    def log_text_wandb(
+        self, prefix, results: List[Dict[str, str]], num_results
+    ) -> None:
         wandb_logger: Optional[WandbLogger] = None
         for logger in self.loggers:
             if isinstance(logger, WandbLogger):
@@ -424,7 +436,9 @@ class CommitMessageGenerationModule(LightningModule):
 
         columns = list(results[0].keys())
         data = [list(result.values()) for result in results[:num_results]]
-        wandb_logger.log_text(prefix + "text", columns=columns, data=data, step=self.global_step)
+        wandb_logger.log_text(
+            prefix + "text", columns=columns, data=data, step=self.global_step
+        )
 
 
 if __name__ == "__main__":
