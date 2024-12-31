@@ -52,7 +52,7 @@ class Seq2SeqWrapper(nn.Module):
                     in_features=model.lm_head.in_features, out_features=decoder_vocab_size
                 )
             self.model = model
-            model.apply(model._init_weights)
+            # model.apply(model._init_weights)
         else:
             encoder.resize_token_embeddings(decoder_vocab_size)
             decoder.resize_token_embeddings(decoder_vocab_size)

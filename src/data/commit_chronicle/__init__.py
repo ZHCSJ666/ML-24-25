@@ -1,1 +1,2 @@
-from .module import CommitChronicleDataModule
+from .cmg import CommitChronicleCMGDataModule
+from .mlm import CommitChronicleMLMDataModule

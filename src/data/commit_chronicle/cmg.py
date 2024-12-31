@@ -1,25 +1,22 @@
 from pathlib import Path
-from typing import Any, List, Literal, Optional
+from typing import Any, List, Optional, Sequence
 
 import datasets
-import rootutils
 import torch
 from datasets import load_from_disk
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
-from transformers import AutoConfig, PreTrainedTokenizerFast
+from transformers import PreTrainedTokenizerFast
 
-rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
-
-from src.data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
+from src.data.commit_chronicle.preprocessor import CommitChroniclePreprocessor
 from src.data.components.collators import DataCollatorTest, DataCollatorTrain
 from src.data.types import SingleExample
 
 
-class CommitChronicleDataModule(LightningDataModule):
-    """`LightningDataModule` for the Commit Chronicle dataset.
+class CommitChronicleCMGDataModule(LightningDataModule):
+    """`LightningDataModule` used for commit message generation tasks.
 
-    This is the dataset for commit message generation, introduced in the paper
+    This uses the Commit Chronicle, introduced in the paper
     "From Commit Message Generation to History-Aware Commit Message Completion", ASE 2023.
 
     Read the docs:
@@ -29,38 +26,35 @@ class CommitChronicleDataModule(LightningDataModule):
 
     def __init__(
         self,
+        diff_tokenizer: PreTrainedTokenizerFast,
+        msg_tokenizer: PreTrainedTokenizerFast,
         completion: bool = False,
         split_ratio: float = 0.5,
-        data_dir: str = "data/datasets/commit-chronicle",
-        languages: List[str] = ["Go"],
-        change_types: List[str] = ["ADD"],
-        diff_tokenizer: PreTrainedTokenizerFast = None,
-        msg_tokenizer: PreTrainedTokenizerFast = None,
+        data_dir: str = "data/commit-chronicle",
+        huggingface_path: str = "JetBrains-Research/commit-chronicle",
+        languages: Sequence[str] = ("Go",),
+        change_types: Sequence[str] = ("ADD",),
         diff_max_len: int = 512,
         msg_max_len: int = 512,
         shift_labels: bool = True,
         decoder_start_token_id=-1,
-        # input configuration
-        encoder_input_type: Literal["diff"] = "diff",
         context_ratio: float = 0.0,
         line_sep: str = "\n",
-        # preprocessing
         use_cache: bool = True,
-        # data loader stuff
         batch_size: int = 16,
         num_workers: int = 0,
         pin_memory: bool = False,
         persistent_workers: bool = True,
     ) -> None:
-        """Initialize a `CommitChronicleDataModule`.
+        """Initialize a `CommitChronicleCMGDataModule`.
 
         Args:
+            diff_tokenizer: Tokenizer used to tokenize the diffs.
+            msg_tokenizer: Tokenizer used to tokenize the commit messages.
             data_dir: Directory to save preprocessed data.
             languages: The languages to be included in the dataset.
             change_types: The change types to be included in the dataset.
                 Each element should be one of 'ADD', 'DELETE', 'RENAME', 'COPY' or 'MODIFY'
-            diff_tokenizer:
-            msg_tokenizer:
             diff_max_len: Maximum length for input git commit diff.
             msg_max_len: Maximum length for commit message.
             line_sep: Newline separator used in data (should be the same for diffs and messages).
@@ -70,7 +64,7 @@ class CommitChronicleDataModule(LightningDataModule):
             num_workers: The number of workers. Defaults to `0`.
             pin_memory: Whether to pin memory. Defaults to `False`.
             shift_labels: Should be True most times, except when using a decoder-only model
-            encoder_input_type: What type of input will be passed to encoder. Currently only `diff` is supported.
+            huggingface_path:
         """
         super().__init__()
 
@@ -81,12 +75,10 @@ class CommitChronicleDataModule(LightningDataModule):
         self.diff_tokenizer = diff_tokenizer
         self.msg_tokenizer = msg_tokenizer
         self.processor = CommitChroniclePreprocessor(
-            diff_tokenizer=self.diff_tokenizer,
-            msg_tokenizer=self.msg_tokenizer,
             diff_line_sep=line_sep,
             change_types=change_types,
-            diff_max_len=diff_max_len,
-            msg_max_len=msg_max_len,
+            languages=languages,
+            huggingface_path=huggingface_path,
         )
         self.data_train: Optional[Dataset] = None
         self.data_val: Optional[Dataset] = None
@@ -97,6 +89,10 @@ class CommitChronicleDataModule(LightningDataModule):
 
         self.batch_size_per_device = batch_size
 
+    @property
+    def processed_data_dir(self):
+        return Path(self.hparams.data_dir) / "processed"
+
     def prepare_data(self) -> None:
         """Download data if needed. Lightning ensures that `self.prepare_data()` is called only
         within a single process on CPU, so you can safely add your downloading logic within. In
@@ -106,8 +102,8 @@ class CommitChronicleDataModule(LightningDataModule):
         Do not use it to assign state (self.x = y).
         """
         for split in ["train", "validation", "test"]:
-            self.processor.process(
-                data_dir=(Path(self.hparams.data_dir)),
+            self.processor(
+                output_dir=self.processed_data_dir / split,
                 split=split,
                 use_cache=self.hparams.use_cache,
             )
@@ -128,14 +124,16 @@ class CommitChronicleDataModule(LightningDataModule):
                 raise RuntimeError(
                     f"Batch size ({self.hparams.batch_size}) is not divisible by the number of devices ({self.trainer.world_size})."
                 )
-            self.batch_size_per_device = (
-                self.hparams.batch_size // self.trainer.world_size
-            )
+            self.batch_size_per_device = self.hparams.batch_size // self.trainer.world_size
 
         def create_dataset(split):
-            path = self.processor.processed_path_for(Path(self.hparams.data_dir), split)
-            dataset = load_from_disk(path)
-            return CommitChronicleDataset(dataset)
+            return CommitChronicleCMGDataset(
+                dataset=load_from_disk(self.processed_data_dir / split),
+                diff_tokenizer=self.diff_tokenizer,
+                msg_tokenizer=self.msg_tokenizer,
+                diff_max_len=self.hparams.diff_max_len,
+                msg_max_len=self.hparams.msg_max_len,
+            )
 
         # load and split datasets only if not loaded already
         if not self.data_train and not self.data_val and not self.data_test:
@@ -151,7 +149,6 @@ class CommitChronicleDataModule(LightningDataModule):
                 msg_eos_token_id=self.msg_tokenizer.eos_token_id,  # type: ignore[attr-defined]
                 msg_pad_token_id=self.msg_tokenizer.pad_token_id,  # type: ignore[attr-defined]
                 msg_sep_token_id=self.msg_tokenizer.sep_token_id,  # type: ignore[attr-defined]
-                encoder_input_type=self.hparams.encoder_input_type,
                 encoder_context_max_len=self.hparams.diff_max_len,
                 decoder_context_max_len=self.hparams.msg_max_len,
                 shift_labels=self.hparams.shift_labels,
@@ -169,7 +166,6 @@ class CommitChronicleDataModule(LightningDataModule):
                 msg_sep_token_id=self.msg_tokenizer.sep_token_id,  # type: ignore[attr-defined]
                 diff_tokenizer=self.diff_tokenizer,
                 msg_tokenizer=self.msg_tokenizer,
-                encoder_input_type=self.hparams.encoder_input_type,
                 encoder_context_max_len=self.hparams.diff_max_len,
                 decoder_context_max_len=self.hparams.msg_max_len,
                 context_ratio=self.hparams.context_ratio,
@@ -187,8 +183,7 @@ class CommitChronicleDataModule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             shuffle=True,
             collate_fn=self.train_val_collator,
-            persistent_workers=self.hparams.persistent_workers
-            and self.hparams.num_workers > 0,
+            persistent_workers=self.hparams.persistent_workers and self.hparams.num_workers > 0,
         )
 
     def val_dataloader(self) -> DataLoader[Any]:
@@ -200,8 +195,7 @@ class CommitChronicleDataModule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
             collate_fn=self.train_val_collator,
-            persistent_workers=self.hparams.persistent_workers
-            and self.hparams.num_workers > 0,
+            persistent_workers=self.hparams.persistent_workers and self.hparams.num_workers > 0,
         )
 
     def test_dataloader(self) -> DataLoader[Any]:
@@ -213,28 +207,26 @@ class CommitChronicleDataModule(LightningDataModule):
             pin_memory=self.hparams.pin_memory,
             shuffle=False,
             collate_fn=self.test_collator,
-            persistent_workers=self.hparams.persistent_workers
-            and self.hparams.num_workers > 0,
+            persistent_workers=self.hparams.persistent_workers and self.hparams.num_workers > 0,
         )
 
 
-def get_decoder_start_token_id(model_cfg: str) -> Optional[int]:
-    if model_cfg == "encoder_decoder":
-        return None
-    elif model_cfg == "decoder":
-        return None
-    elif model_cfg == "encoder":
-        return None
-    # assumes seq2seq
-    config = AutoConfig.from_pretrained(model_cfg)
-    return config.decoder_start_token_id
-
-
-class CommitChronicleDataset(torch.utils.data.Dataset):
+class CommitChronicleCMGDataset(torch.utils.data.Dataset):
     """Simple wrapper dataset around a datasets.Dataset object."""
 
-    def __init__(self, dataset: datasets.Dataset) -> None:
+    def __init__(
+        self,
+        dataset: datasets.Dataset,
+        diff_tokenizer: PreTrainedTokenizerFast,
+        msg_tokenizer: PreTrainedTokenizerFast,
+        diff_max_len: int,
+        msg_max_len: int,
+    ) -> None:
         self.dataset = dataset
+        self.diff_tokenizer = diff_tokenizer
+        self.msg_tokenizer = msg_tokenizer
+        self.diff_max_len = diff_max_len
+        self.msg_max_len = msg_max_len
 
     def __len__(self) -> int:
         """Return the number of samples in the dataset."""
@@ -244,11 +236,28 @@ class CommitChronicleDataset(torch.utils.data.Dataset):
         """Gets a single example from the dataset."""
         row = self.dataset[index]
         return SingleExample(
-            diff_input_ids=row["diff_input_ids"],
-            msg_input_ids=row["msg_input_ids"],
-            pos_in_file=row.get("pos_in_file"),
+            diff_input_ids=self._tokenize_diffs([row["diff"]])[0],
+            msg_input_ids=self._tokenize_messages([row["msg"]])[0],
         )
 
+    def _tokenize_diffs(self, diffs: List[str]) -> List[List[int]]:
+        """Tokenizes diffs via transformers' tokenizer.
 
-if __name__ == "__main__":
-    _ = CommitChronicleDataModule()
+        Diffs are truncated to save memory. Special tokens are added later, during batch
+        construction, so 2 extra tokens from max_length are reserved for BOS and EOS.
+        """
+        tokenized_input = self.diff_tokenizer(
+            diffs,
+            truncation=True,
+            max_length=self.diff_max_len - 2,
+            padding=False,
+            add_special_tokens=False,
+        ).input_ids  # type: ignore[operator]
+
+        return tokenized_input
+
+    def _tokenize_messages(self, messages: List[str]) -> List[List[int]]:
+        """Tokenizes commit messages via transformers' tokenizer."""
+        return self.msg_tokenizer(
+            messages, truncation=False, padding=False, add_special_tokens=False  # type: ignore[operator]
+        ).input_ids

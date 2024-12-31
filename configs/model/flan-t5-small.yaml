@@ -1,4 +1,4 @@
-_target_: src.models.cmg_module.CommitMessageGenerationModule
+_target_: src.models.CommitMessageGenerationModule
 
 optimizer:
   _target_: src.optimizers.create_optimizer

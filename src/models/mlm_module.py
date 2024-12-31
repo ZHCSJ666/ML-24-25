@@ -17,7 +17,7 @@ from src.metrics.rouge import ROUGEScore
 from src.models.components.encoder_decoder import EncoderDecoder
 
 
-class CommitMessageGenerationModule(LightningModule):
+class MaskedLanguageModelingModule(LightningModule):
     """Git commit message generation module.
 
     Docs:
@@ -31,8 +31,7 @@ class CommitMessageGenerationModule(LightningModule):
         scheduler: Optional[Callable[..., torch.optim.lr_scheduler]] = None,
         compile: bool = False,
         shift: bool = False,
-        pretrained: Optional[str] = None,
-        val_text_metrics_every_step: bool = True,
+        val_text_metrics_every_step: bool = False,
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Initialize a `CommitMessageGenerationModule`.
@@ -54,10 +53,6 @@ class CommitMessageGenerationModule(LightningModule):
         self.criterion = nn.NLLLoss(ignore_index=-100)  # Updated to ignore padding tokens
 
         self.net = net
-        if pretrained is not None:
-            checkpoint = torch.load(pretrained, map_location="cpu")
-            state_dict = {k.replace("net.", ""): v for k, v in checkpoint["state_dict"].items()}
-            self.net.load_state_dict(state_dict)
 
         text_metrics = MetricCollection(
             {
@@ -164,35 +159,66 @@ class CommitMessageGenerationModule(LightningModule):
 
         return loss
 
-    def training_step(self, batch: BatchTrain, batch_idx: int) -> torch.Tensor:
+    def training_step(
+        self, batch: dict[str, torch.Tensor], batch_idx: int
+    ) -> Optional[torch.Tensor]:
         """Training step.
 
         :param batch: A training batch.
         :param batch_idx: Index of the batch.
         :return: Dictionary containing the loss.
         """
-        return self.common_step(batch, "train")
+        return self.common_step(
+            BatchTrain(
+                encoder_input_ids=batch["input_ids"],
+                encoder_attention_mask=batch.get("attention_mask"),
+                decoder_input_ids=None,
+                decoder_attention_mask=None,
+                labels=batch["labels"].long(),
+            ),
+            "train",
+        )
 
-    def test_step(self, batch: BatchTest, batch_idx: int) -> None:
+    def test_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
         """Test step.
 
         :param batch: A test batch.
         :param batch_idx: Index of the batch.
         """
-        self.evaluate_text(batch, "test")
+        self.evaluate_text(
+            BatchTest(
+                encoder_input_ids=batch["input_ids"],
+                encoder_attention_mask=batch.get("attention_mask"),
+                targets=batch.get("labels").long(),
+                decoder_input_ids=None,
+                decoder_attention_mask=None,
+                labels=None,
+                prefixes=None,
+            ),
+            "test",
+        )
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
         self.evaluate_text(self.train_batch, "train")
         self.train_batch = None
 
-    def validation_step(self, batch: BatchTrain, batch_idx: int) -> None:
+    def validation_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
         """Validation step.
 
         :param batch: A validation batch.
         :param batch_idx: Index of the batch.
         """
-        self.common_step(batch, "val")
+        self.common_step(
+            BatchTrain(
+                encoder_input_ids=batch["input_ids"],
+                encoder_attention_mask=batch.get("attention_mask"),
+                decoder_input_ids=None,
+                decoder_attention_mask=None,
+                labels=batch["labels"].long(),
+            ),
+            "val",
+        )
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""
@@ -321,9 +347,9 @@ class CommitMessageGenerationModule(LightningModule):
             batch,
             **kwargs,
             prefix_allowed_tokens_fn=None,
-            pad_token_id=self.msg_tokenizer.pad_token_id,
-            bos_token_id=self.msg_tokenizer.bos_token_id,
-            eos_token_id=self.msg_tokenizer.eos_token_id,
+            pad_token_id=self.diff_tokenizer.pad_token_id,
+            bos_token_id=self.diff_tokenizer.bos_token_id,
+            eos_token_id=self.diff_tokenizer.eos_token_id,
         )
 
     def _postprocess_generated(
@@ -339,16 +365,20 @@ class CommitMessageGenerationModule(LightningModule):
             A dict with decoded sources/predictions.
         """
         decoded_inputs = self.decode_src(batch.encoder_input_ids, skip_special_tokens=True)[0]
-        decoded_preds = self.decode_tgt(predictions, skip_special_tokens=True)[0]
+        decoded_preds = self.decode_src(predictions, skip_special_tokens=True)[0]
 
         if batch.labels is not None:
             targets = batch.labels.clone()
-            targets = torch.where(targets == -100, self.msg_tokenizer.pad_token_id, targets)
-            decoded_targets = self.decode_tgt(targets, skip_special_tokens=True)[0]
+            targets = torch.where(targets == -100, self.diff_tokenizer.pad_token_id, targets)
         elif isinstance(batch, BatchTest) and batch.targets is not None:
-            decoded_targets = batch.targets
+            targets = batch.targets
         else:
             raise ValueError(f"No target set")
+
+        if torch.is_tensor(targets):
+            decoded_targets = self.decode_src(targets, skip_special_tokens=True)[0]
+        else:
+            decoded_targets = targets
 
         results = []
 
@@ -429,4 +459,4 @@ def is_valid_tensor(tensor):
 
 
 if __name__ == "__main__":
-    _ = CommitMessageGenerationModule(None, None, None, None)
+    _ = MaskedLanguageModelingModule(None, None, None, None)

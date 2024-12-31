@@ -2,7 +2,7 @@ from pathlib import Path
 
 import rootutils
 
-from src.data.commit_chronicle import CommitChronicleDataModule
+from src.data.commit_chronicle import CommitChronicleCMGDataModule
 
 ROOT = rootutils.find_root(__file__, ".project-root")
 
@@ -13,7 +13,7 @@ def test_commit_chronicle_datamodule() -> None:
     sizes correctly match."""
     data_dir = str(ROOT / "data/datasets/commit-chronicle")
 
-    dm = CommitChronicleDataModule(data_dir=data_dir, batch_size=2)
+    dm = CommitChronicleCMGDataModule(data_dir=data_dir, batch_size=2)
     dm.prepare_data()
 
     assert not dm.data_test
