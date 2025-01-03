@@ -1,2 +1,3 @@
 from .cmg_module import CommitMessageGenerationModule
 from .mlm_module import MaskedLanguageModelingModule
+from .clm_module import CausalLanguageModelingModule

@@ -38,19 +38,51 @@ If for some reason, imports are not working well for you, you can install the pr
 pip install -e . --config-settings editable_mode=compat
 ```
 
+## Experiments
+
+The task of git commit message can be posed in a number of ways. So far we've experimented with two approaches
+1. Sequence-to-sequence task
+2. Causal language modeling
+
+### Sequence-to-Sequence
+
+For transformer based models, during training, input to the encoder is git diffs and input to the decoder is the ground
+truth commit message.
+
+Examples
+1. t5-efficient-tiny
+```shell
+python src/train.py experiment=t5-efficient-tiny logger=tensorboard
+```
+
+### Causal Language Modeling
+
+Decoder-only models are popular candidates for casual language modeling. Here input diff and ground truth commit message 
+concatenated with a special (separation token) in between. During testing, the git diff is appended at its end by the
+separation token.
+
+Examples
+1. pythia-14m
+```shell
+# (debug) fast dev run
+python src/train.py experiment=pythia logger=tensorboard +trainer.overfit_batches=3 trainer.max_epochs=50
+
+# to train on full dataset
+python src/train.py experiment=pythia logger=tensorboard
+```
 ## How to run
 
-Training examples with [flan-t5-small](configs/experiment/flan-t5-small.yaml) experiment configuration
+Training examples with [t5-efficient-tiny](configs/experiment/t5-efficient-tiny.yaml) experiment configuration
 
 ```bash
 # train with flan-t5 model on Commit Chronicle dataset
-python src/train.py experiment=flan-t5-small logger=tensorboard
+python src/train.py experiment=t5-efficient-tiny logger=tensorboard
 
 # (debug) overfit on subset of training data
-python src/train.py experiment=flan-t5-small logger=tensorboard +trainer.overfit_batches=3 trainer.max_epochs=50
+python src/train.py experiment=t5-efficient-tiny logger=tensorboard +trainer.overfit_batches=3 trainer.max_epochs=50
 
 # (debug) fast dev run
-python src/train.py experiment=flan-t5-small logger=tensorboard +trainer.fast_dev_run=True trainer=cpu
+python src/train.py experiment=t5-efficient-tiny logger=tensorboard +trainer.fast_dev_run=True trainer=cpu
 ```
 
 You can override any parameter from command line like this
