@@ -1,21 +1,26 @@
 import hashlib
-import random
 from typing import Optional
 
-from lightning.pytorch.loggers import TensorBoardLogger, WandbLogger
+import wandb
+from lightning.pytorch.loggers import TensorBoardLogger
 
 
 class TextLoggingMixin:
-    def log_text(self, prefix, results: list[dict[str, str]], num_results: int = 4) -> None:
+    _wandb_tables: dict[str, wandb.Table]
+
+    def log_text(
+        self, prefix, results: list[dict[str, str]], num_results: Optional[int] = None
+    ) -> None:
         """Log generated git commit message results.
 
         This method only supports TensorBoard and Wandb at the moment.
         """
-        random.shuffle(results)
-        self.log_text_tensorboard(prefix, results, num_results)
-        self.log_text_wandb(prefix, results, num_results)
+        self._log_text_tensorboard(prefix, results, num_results)
+        self._log_text_wandb(prefix, results, num_results)
 
-    def log_text_tensorboard(self, prefix, results: list[dict[str, str]], num_results) -> None:
+    def _log_text_tensorboard(
+        self, prefix, results: list[dict[str, str]], num_results: Optional[int]
+    ) -> None:
         tb_logger: Optional[TensorBoardLogger] = None
         for logger in self.loggers:
             if isinstance(logger, TensorBoardLogger):
@@ -29,18 +34,40 @@ class TextLoggingMixin:
             for key, value in result.items():
                 writer.add_text(prefix + key, value, self.global_step)
 
-    def log_text_wandb(self, prefix, results: list[dict[str, str]], num_results) -> None:
-        wandb_logger: Optional[WandbLogger] = None
-        for logger in self.loggers:
-            if isinstance(logger, WandbLogger):
-                wandb_logger = logger
-                break
-        if wandb_logger is None:
-            return
+    def _log_text_wandb(
+        self,
+        prefix,
+        results: list[dict[str, str]],
+        num_results: Optional[int],
+        use_step: bool = True,
+    ) -> None:
+        if num_results:
+            results = results[:num_results]
+        if self._is_wandb_initialized():
+            columns = ["step" if use_step else "epoch"] + list(results[0].keys())
+            step_or_epoch = [self.global_step if use_step else self.current_epoch]
+            # inspired by https://github.com/wandb/wandb/issues/2981#issuecomment-2495140257
+            saved_table = self._get_wandb_table(prefix) or wandb.Table(columns=columns)
+            table = wandb.Table(columns=columns, data=saved_table.data)  #
+            for result in results:
+                row_data = step_or_epoch + list(result.values())
+                table.add_data(*row_data)
+            wandb.log({prefix: table}, commit=False)
+            self._set_wandb_table(prefix, table)
 
-        columns = list(results[0].keys())
-        data = [list(result.values()) for result in results[:num_results]]
-        wandb_logger.log_text(prefix + "text", columns=columns, data=data, step=self.global_step)
+    @staticmethod
+    def _is_wandb_initialized() -> bool:
+        return wandb.run is not None
+
+    def _get_wandb_table(self, prefix: str) -> Optional[wandb.Table]:
+        if not hasattr(self, "_wandb_tables"):
+            self._wandb_tables = {}
+        return self._wandb_tables.get(prefix)
+
+    def _set_wandb_table(self, prefix: str, table: wandb.Table) -> None:
+        if not hasattr(self, "_wandb_tables"):
+            self._wandb_tables = {}
+        self._wandb_tables[prefix] = table
 
 
 def hash_dict(input_dict):

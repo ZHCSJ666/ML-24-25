@@ -4,8 +4,6 @@ from typing import Any, Callable, Dict, List, Optional
 import torch
 import torch.nn as nn
 from lightning import LightningModule
-from lightning.pytorch.loggers.tensorboard import TensorBoardLogger
-from lightning.pytorch.loggers.wandb import WandbLogger
 from torchmetrics import MetricCollection
 from transformers import PreTrainedTokenizerFast
 from transformers.modeling_outputs import Seq2SeqLMOutput
@@ -15,9 +13,10 @@ from src.metrics import MRR, Accuracy
 from src.metrics.bleu import SacreBLEUScore
 from src.metrics.rouge import ROUGEScore
 from src.models.components.encoder_decoder import EncoderDecoder
+from src.utils.more_utils import TextLoggingMixin
 
 
-class CommitMessageGenerationModule(LightningModule):
+class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
     """Git commit message generation module.
 
     Docs:
@@ -387,42 +386,6 @@ class CommitMessageGenerationModule(LightningModule):
             str: Decoded target text.
         """
         return tuple(self.msg_tokenizer.batch_decode(arg, **kwargs) for arg in args)
-
-    def log_text(self, prefix, results: List[Dict[str, str]], num_results: int = 4) -> None:
-        """Log generated git commit message results.
-
-        This method only supports TensorBoard and Wandb at the moment.
-        """
-        random.shuffle(results)
-        self.log_text_tensorboard(prefix, results, num_results)
-        self.log_text_wandb(prefix, results, num_results)
-
-    def log_text_tensorboard(self, prefix, results: List[Dict[str, str]], num_results) -> None:
-        tb_logger: Optional[TensorBoardLogger] = None
-        for logger in self.loggers:
-            if isinstance(logger, TensorBoardLogger):
-                tb_logger = logger
-                break
-        if tb_logger is None:
-            return
-
-        writer = tb_logger.experiment
-        for result in results[:num_results]:
-            for key, value in result.items():
-                writer.add_text(prefix + key, value, self.global_step)
-
-    def log_text_wandb(self, prefix, results: List[Dict[str, str]], num_results) -> None:
-        wandb_logger: Optional[WandbLogger] = None
-        for logger in self.loggers:
-            if isinstance(logger, WandbLogger):
-                wandb_logger = logger
-                break
-        if wandb_logger is None:
-            return
-
-        columns = list(results[0].keys())
-        data = [list(result.values()) for result in results[:num_results]]
-        wandb_logger.log_text(prefix + "text", columns=columns, data=data, step=self.global_step)
 
 
 def is_valid_tensor(tensor):
