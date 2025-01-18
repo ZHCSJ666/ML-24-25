@@ -21,3 +21,8 @@ tensorboard
 lightning
 rich
 torchmetrics
+ollama
+tenacity
+openai
+tiktoken
+wandb

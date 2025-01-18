@@ -1,7 +1,10 @@
 import hashlib
+import json
+from pathlib import Path
 from typing import Optional
 
 import wandb
+from datasets import Dataset, load_dataset
 from lightning.pytorch.loggers import TensorBoardLogger
 
 
@@ -87,3 +90,31 @@ def hash_dict(input_dict):
     # Hash the bytes using SHA256
     hash_object = hashlib.sha256(dict_as_bytes)
     return hash_object.hexdigest()
+
+
+def load_jsonl_as_dataset(path: Path) -> Dataset:
+    dataset = load_dataset("json", data_files=str(path))["train"]
+    return dataset
+
+
+def get_last_checkpoint(checkpoint_file: Path) -> int:
+    """Retrieve the last processed index from the checkpoint file."""
+    if checkpoint_file.exists():
+        with open(checkpoint_file, "r") as f:
+            try:
+                return int(f.read().strip())  # Read last index
+            except ValueError:
+                return -1  # Default to start from the beginning
+    return -1  # If no checkpoint file, start from scratch
+
+
+def append_jsonl(data: dict, filename: Path) -> None:
+    """Append a JSON object as a new line in a JSONL file."""
+    with open(filename, "a") as f:
+        f.write(json.dumps(data) + "\n")
+
+
+def save_checkpoint(checkpoint_file: Path, index: int) -> None:
+    """Save the last processed index to the checkpoint file."""
+    with open(checkpoint_file, "w") as f:
+        f.write(str(index))

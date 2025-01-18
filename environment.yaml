@@ -25,6 +25,7 @@ dependencies:
   - numpy=1.24.*
   - seaborn
   - jupyterlab
+  - wandb
 
   # --------- loggers --------- #
   # - wandb
@@ -51,3 +52,8 @@ dependencies:
       - rapidfuzz
       - marisa-trie
       - polars # for https://github.com/huggingface/datasets/issues/3644#issuecomment-1997484590
+      - bert_score
+      - openai
+      - tiktoken
+      - ollama
+      - tenacity
