@@ -1,6 +1,7 @@
 import json
 import math
 import multiprocessing as mp
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -12,6 +13,7 @@ from loguru import logger
 from openai import OpenAI
 from tenacity import retry, wait_random_exponential, stop_after_attempt
 from tqdm import tqdm
+from transformers import AutoTokenizer
 
 from .chat_completer import LLMChatCompleter, LLMChatCompleterResponse
 from ..more_utils import load_jsonl_as_dataset
@@ -39,6 +41,7 @@ class GPTChatCompleter(LLMChatCompleter):
 
     PRICING_PER_1M_TOKENS = {
         "gpt-4o-mini-2024-07-18": 0.075,
+        "deepseek-chat": 0.14,
     }
 
     def __init__(
@@ -49,6 +52,8 @@ class GPTChatCompleter(LLMChatCompleter):
         max_prompt_token_count: int,
         max_response_token_count: int,
         batch_limit_tpd: int,
+        tokenizer: str | None = None,
+        base_url: str | None = None,
         num_proc: int | None = None,
     ) -> None:
         """
@@ -72,6 +77,8 @@ class GPTChatCompleter(LLMChatCompleter):
         ), f"Model '{model}' is not supported yet. Available models include [{list(GPTChatCompleter.PRICING_PER_1M_TOKENS.keys())}]'"
         self.api_key = api_key
         self.model = model
+        self.base_url = base_url
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer) if tokenizer else None
         self.temperature = temperature
         self.max_prompt_token_count = max_prompt_token_count
         self.max_response_token_count = max_response_token_count
@@ -84,19 +91,45 @@ class GPTChatCompleter(LLMChatCompleter):
     # written here to allow serialization during multiprocessing
     @property
     def client(self):
-        return OpenAI(api_key=self.api_key)
+        return OpenAI(api_key=self.api_key, base_url=self.base_url)
 
     def count_tokens(self, message: str | list[dict[str, str]]) -> int:
+        if self.tokenizer is not None:
+            if not isinstance(message, str):
+                try:
+                    message = self.tokenizer.apply_chat_template(
+                        message,
+                        truncation=False,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                        max_length=sys.maxsize,  # to suppress a warning
+                    )
+                except ValueError:
+                    messages = []
+                    for m in message:
+                        for k, v in m.items():
+                            messages.append(v)
+                    message = " ".join(messages)
+            return len(self.encode(message))
         if isinstance(message, str):
             encoding = tiktoken.encoding_for_model(self.model)
             return len(encoding.encode(message))
         return num_tokens_from_messages(message, model=self.model)
 
     def encode(self, message: str) -> list[int]:
+        if self.tokenizer is not None:
+            return self.tokenizer(
+                [message],
+                truncation=False,
+                # to suppress a warning
+                max_length=sys.maxsize,
+            )["input_ids"][0]
         encoding = tiktoken.encoding_for_model(self.model)
         return encoding.encode(message)
 
     def decode(self, message: list[int]) -> str:
+        if self.tokenizer is not None:
+            return self.tokenizer.decode(message, skip_special_tokens=True)
         encoding = tiktoken.encoding_for_model(self.model)
         return encoding.decode(message)
 

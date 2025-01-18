@@ -37,8 +37,8 @@ user_content_template: |-
   9. Output only the simplified message without any explanation or formatting.
 #max_msg_token_count: 64
 #max_prompt_token_count: 1000
-max_msg_token_count: 256
-max_prompt_token_count: 3000
+max_msg_token_count: 24
+max_prompt_token_count: 1000
 
 
 huggingface_repo:

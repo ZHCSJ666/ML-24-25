@@ -91,5 +91,4 @@ class OllamaChatCompleter(LLMChatCompleter):
         )["input_ids"][0]
 
     def decode(self, tokens: list[int]) -> list[int]:
-        response = self.tokenizer.decode(tokens, skip_special_tokens=True)
-        return response
+        return self.tokenizer.decode(tokens, skip_special_tokens=True)
