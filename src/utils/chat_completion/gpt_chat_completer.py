@@ -18,6 +18,25 @@ from ..more_utils import load_jsonl_as_dataset
 
 
 class GPTChatCompleter(LLMChatCompleter):
+    """
+    A chat completion handler for OpenAI's GPT models.
+
+    This class facilitates interactions with OpenAI's GPT API for chat-based
+    completions. It supports token counting, batch processing, and cost estimation.
+
+    Attributes:
+        PRICING_PER_1M_TOKENS (dict): A dictionary mapping supported models to their
+            pricing per million tokens.
+        api_key (str): The OpenAI API key for authentication.
+        model (str): The name of the GPT model to use.
+        temperature (float): The temperature setting for response generation.
+        max_prompt_token_count (int): Maximum token count allowed for the prompt.
+        max_response_token_count (int): Maximum token count allowed for the response.
+        num_proc (int): Number of parallel processes for batch processing.
+        batch_limit_tpd (int): Token per day limit for batch processing.
+        batch_size (int): The number of examples per batch, derived from batch_limit_tpd.
+    """
+
     PRICING_PER_1M_TOKENS = {
         "gpt-4o-mini-2024-07-18": 0.075,
     }
@@ -32,12 +51,26 @@ class GPTChatCompleter(LLMChatCompleter):
         batch_limit_tpd: int,
         num_proc: int | None = None,
     ) -> None:
-        # api_key = api_key or os.environ.get("OPENAI_API_KEY", None)
-        assert api_key is not None, "OPENAI_API_KEY environment variable is not set"
+        """
+        Initializes the GPTChatCompleter.
+
+        Args:
+            api_key (str): The OpenAI API key for authentication.
+            model (str): The GPT model name (e.g., "gpt-4o-mini-2024-07-18").
+            temperature (float): Controls randomness in the model’s responses (higher values = more randomness).
+            max_prompt_token_count (int): The maximum number of tokens allowed in the input prompt.
+            max_response_token_count (int): The maximum number of tokens allowed in the model's response.
+            batch_limit_tpd (int): The maximum number of tokens that can be processed per day in batch mode.
+            num_proc (int | None, optional): Number of processes to use for batch operations. Defaults to available CPU count.
+
+        Raises:
+            AssertionError: If `api_key` is None or `model` is not supported.
+        """
+        assert api_key is not None
         assert (
             model in GPTChatCompleter.PRICING_PER_1M_TOKENS
         ), f"Model '{model}' is not supported yet. Available models include [{list(GPTChatCompleter.PRICING_PER_1M_TOKENS.keys())}]'"
-        self.client = OpenAI(api_key=api_key)
+        self.api_key = api_key
         self.model = model
         self.temperature = temperature
         self.max_prompt_token_count = max_prompt_token_count
@@ -47,6 +80,11 @@ class GPTChatCompleter(LLMChatCompleter):
         # batch api stuff
         self.batch_limit_tpd = batch_limit_tpd
         self.batch_size = batch_limit_tpd // max_prompt_token_count
+
+    # written here to allow serialization during multiprocessing
+    @property
+    def client(self):
+        return OpenAI(api_key=self.api_key)
 
     def count_tokens(self, message: str | list[dict[str, str]]) -> int:
         if isinstance(message, str):
@@ -130,9 +168,13 @@ class GPTChatCompleter(LLMChatCompleter):
             batch = Dataset.from_dict(batch)
             batch.to_json(requests_dir / f"{i:06d}.jsonl", orient="records", lines=True)
 
-    def submit_batch(self, working_dir: Path, output_dataset_path: Path) -> None:
+    def submit_batch(self, working_dir: Path) -> Path:
         requests_dir = working_dir / "requests"
         responses_dir = working_dir / "responses"
+        output_dataset_path = working_dir / "results.jsonl"
+
+        if output_dataset_path.exists():
+            return output_dataset_path
         batch_request_files = [
             path for path in requests_dir.iterdir() if path.is_file() and path.suffix == ".jsonl"
         ]
@@ -163,7 +205,7 @@ class GPTChatCompleter(LLMChatCompleter):
             if not is_completed:
                 logger.error(f"Could not complete chat completion job for '{request_file}'.")
                 logger.error(f"{api_status}, {api_errors}")
-                return
+                raise Exception("Could not complete chat completion job.")
 
         # create new dataset from responses
         datasets = []
@@ -180,6 +222,7 @@ class GPTChatCompleter(LLMChatCompleter):
 
         combined_dataset = concatenate_datasets(datasets)
         combined_dataset.to_json(output_dataset_path, orient="records", lines=True)
+        return output_dataset_path
 
     def estimate_max_costs(self, dataset_size: int) -> dict[str, Any]:
         price_per_1m_tokens = self.PRICING_PER_1M_TOKENS[self.model]
@@ -247,7 +290,6 @@ def num_tokens_from_messages(messages: list[dict[str, str]], model="gpt-4o-mini-
         print("Warning: model not found. Using o200k_base encoding.")
         encoding = tiktoken.get_encoding("o200k_base")
     if model in {
-        "gpt-2",  # I added this
         "gpt-3.5-turbo-0125",
         "gpt-4-0314",
         "gpt-4-32k-0314",

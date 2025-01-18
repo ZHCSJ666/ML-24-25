@@ -57,3 +57,4 @@ dependencies:
       - tiktoken
       - ollama
       - tenacity
+      - loguru

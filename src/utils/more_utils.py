@@ -92,8 +92,8 @@ def hash_dict(input_dict):
     return hash_object.hexdigest()
 
 
-def load_jsonl_as_dataset(path: Path) -> Dataset:
-    dataset = load_dataset("json", data_files=str(path))["train"]
+def load_jsonl_as_dataset(path: Path, split: str = "train") -> Dataset:
+    dataset = load_dataset("json", data_files={split: str(path)})[split]
     return dataset
 
 

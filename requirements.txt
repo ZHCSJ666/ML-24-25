@@ -26,3 +26,4 @@ tenacity
 openai
 tiktoken
 wandb
+loguru

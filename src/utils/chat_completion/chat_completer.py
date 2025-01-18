@@ -21,7 +21,7 @@ class LLMChatCompleter:
     def prepare_batch(self, dataset: Dataset, output_dir: Path) -> None:
         raise NotImplementedError()
 
-    def submit_batch(self, working_dir: Path, output_dataset_path: Path) -> None:
+    def submit_batch(self, working_dir: Path) -> Path:
         raise NotImplementedError()
 
     def estimate_max_costs(self, dataset_size: int) -> dict[str, Any]:

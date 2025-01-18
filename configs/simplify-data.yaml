@@ -1,11 +1,12 @@
 # @package _global_
 defaults:
   - _self_
-  - chat_completer: qwen2.5-coder-14b # qwen2.5-coder-14b or  gpt-4o-mini
+  - chat_completer: qwen2.5-coder-7b
 
 _target_: src.simplify_data.MainDictConfig
 
-split: test
+# Optional: Can be one of train, test, or validation
+split:
 languages: ["Go"]
 change_types: []
 diff_line_sep: "\n"
@@ -13,7 +14,9 @@ diff_line_sep: "\n"
 # should be one of 'prompt-testing', 'eager' or 'batch'
 mode: prompt-testing
 seed: 419
-prompt_testing_example_index: 1 # use -1 for random example
+prompt_testing_example_index: 100 # use -1 for random example
+# for debugging purposes during eager or batch mode
+debug_run: True
 
 system_content: You are a helpful assistant that simplifies commit messages.
 user_content_template: |-
@@ -26,7 +29,7 @@ user_content_template: |-
   1. Maximum 16 words
   2. Use only these verbs: add, update, remove, fix, refactor
   3. Reference only code elements visible in the diff
-  4. Format: "<verb> <optional code element> [brief detail]"
+  4. Format: "<verb> <optional code element> <brief detail>" e.g. Add documentation for unit testing
   5. Exclude all contextual information not visible in the code changes
   6. Focus on the technical change, not the purpose or impact
   7. Use consistent terminology for similar changes
@@ -49,17 +52,8 @@ huggingface_repo:
 root_dir: ${oc.env:PROJECT_ROOT}
 
 # path to cache intermediate shit
-output_dir: ${.root_dir}/data/cleaning/${.split}
+output_dir: ${.root_dir}/data/cleaning/
 
 hydra:
   run:
     dir: ${...root_dir}/logs/data_simplification/runs/${now:%Y-%m-%d}_${now:%H-%M-%S}
-
-
-# debugging
-# ############
-
-
-# if True, code only creates batches and computes statistics but doesn't upload to openai
-# this is used when is_prompt_testing=False
-dry_run: True

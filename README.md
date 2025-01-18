@@ -1,3 +1,4 @@
+<!--suppress HtmlDeprecatedAttribute -->
 <div align="center">
 
 # Git Commit Message Generation
@@ -38,7 +39,54 @@ If for some reason, imports are not working well for you, you can install the pr
 pip install -e . --config-settings editable_mode=compat
 ```
 
-## Experiments
+## **Data Simplification**
+
+The main script for dataset simplification is **[src/simplify_data.py](src/simplify_data.py)**, with its corresponding configuration file located at **[configs/simplify-data.yaml](configs/simplify-data.yaml)**.
+
+### **Modes of Operation**
+
+The script supports three modes:
+
+1. **`prompt-testing`**  
+   - Runs a single prompt on an example and prints the result.
+  
+2. **`eager`**  
+   - Processes the entire dataset by making an API request for each example.
+  
+3. **`batch`** *(Supported only by GPT)*  
+   - Uses batch requests for processing, typically executing within a 24-hour window.
+
+### **Supported LLM APIs for Chat Completion**
+
+The script supports two categories of LLM-based chat completion APIs:
+
+1. **GPT**  
+   - Implemented in **[GPT Chat Completer](src/utils/chat_completion/gpt_chat_completer.py)**  
+   - Requires setting the `OPENAI_API_KEY` environment variable.
+  
+2. **Ollama**  
+   - Implemented in **[Ollama Chat Completer](src/utils/chat_completion/ollama_chat_completer.py)**  
+   - Requires installing and running [Ollama](https://ollama.com/) locally or using a cloud-based Ollama instance.
+   - Pull desired Ollama model first before running `src/simplify_data.py` e.g.  `ollama pull qwen2.5-coder:7b`
+For examples of currently configured LLMs, refer to **[Chat Completer Config](configs/chat_completer)**.
+
+### **Usage Example**
+
+```bash
+# Example running a prompt test using the qwen2.5-coder-7b model
+ollama pull qwen2.5-coder:7b
+python src/simplify_data.py chat_completer=qwen2.5-coder-7b mode=prompt-testing split=test
+
+# Example debugging an eager mode run using the qwen2.5-coder-7b model
+ollama pull qwen2.5-coder:7b
+python src/simplify_data.py chat_completer=qwen2.5-coder-7b mode=eager debug_run=True
+
+# Example running an eager mode run using the qwen2.5-coder-7b model
+ollama pull qwen2.5-coder:7b
+python src/simplify_data.py chat_completer=qwen2.5-coder-7b mode=eager debug_run=False
+```
+
+## Git Commit Message Generation Experiments
 
 The task of git commit message can be posed in a number of ways. So far we've experimented with two approaches
 1. Sequence-to-sequence task
