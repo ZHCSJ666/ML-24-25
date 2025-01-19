@@ -62,7 +62,8 @@ The script supports two categories of LLM-based chat completion APIs:
 
 1. **GPT**  
    - Implemented in **[GPT Chat Completer](src/utils/chat_completion/gpt_chat_completer.py)**  
-   - Requires setting the `OPENAI_API_KEY` environment variable.
+   - This interfaces with OpenAI's API or an API (like [DeepSeek](https://api-docs.deepseek.com/)) that's compatible
+   with OpenAI's API.
   
 2. **Ollama**  
    - Implemented in **[Ollama Chat Completer](src/utils/chat_completion/ollama_chat_completer.py)**  
@@ -70,22 +71,37 @@ The script supports two categories of LLM-based chat completion APIs:
    - Pull desired Ollama model first before running `src/simplify_data.py` e.g.  `ollama pull qwen2.5-coder:7b`
 For examples of currently configured LLMs, refer to **[Chat Completer Config](configs/chat_completer)**.
 
-### **Usage Example**
+### **Usage Examples**
 
+1. [qwen2.5-coder-7b](configs/chat_completer/qwen2.5-coder-7b.yaml)
 ```bash
-# Example running a prompt test using the qwen2.5-coder-7b model
+# Example running a prompt test
 ollama pull qwen2.5-coder:7b
 python src/simplify_data.py chat_completer=qwen2.5-coder-7b mode=prompt-testing split=test
 
-# Example debugging an eager mode run using the qwen2.5-coder-7b model
-ollama pull qwen2.5-coder:7b
+# Example debugging an eager mode run
+ollama pull qwen2.5-coder:7b # this should if the model hasn't been previously pulled or has been deleted
 python src/simplify_data.py chat_completer=qwen2.5-coder-7b mode=eager debug_run=True
 
-# Example running an eager mode run using the qwen2.5-coder-7b model
+# Example running an eager mode run
 ollama pull qwen2.5-coder:7b
 python src/simplify_data.py chat_completer=qwen2.5-coder-7b mode=eager debug_run=False
 ```
+2. [GPT-4o-mini](configs/chat_completer/gpt-4o-mini.yaml)
 
+Using [OpenAI's API](https://platform.openai.com/docs/overview) requires setting the `OPENAI_API_KEY` environment variable.
+```bash
+# Example running a prompt test
+python src/simplify_data.py chat_completer=gpt-4o-mini mode=prompt-testing split=test
+```
+
+3. [DeepSeek-v3](configs/chat_completer/deepseek-v3.yaml)
+
+Using [DeepSeek's API](https://api-docs.deepseek.com/) requires setting the `DEEPSEEK_API_KEY` environment variable.
+```bash
+# Example running a prompt test
+python src/simplify_data.py chat_completer=deepseek-v3 mode=prompt-testing split=test
+```
 ## Git Commit Message Generation Experiments
 
 The task of git commit message can be posed in a number of ways. So far we've experimented with two approaches

@@ -8,43 +8,46 @@ _target_: src.simplify_data.MainDictConfig
 # Optional: Can be one of train, test, or validation
 split:
 languages: ["Go"]
-change_types: []
+change_types:
 diff_line_sep: "\n"
+# Basically, we have a lot of change types that are of the "MODIFY" change type.
+# We don't want to use all of this dataset as we don't have enough compute resources to handle all the data.
+# This parameter is used to select a fraction of changes that belong to the "MODIFY" change type.
+# This value must be between 0 and 1 (both inclusive)
+limit_modify_change_types: 0.1
 
 # should be one of 'prompt-testing', 'eager' or 'batch'
-mode: prompt-testing
+mode: eager
 seed: 419
 prompt_testing_example_index: 100 # use -1 for random example
 # for debugging purposes during eager or batch mode
-debug_run: True
+debug_run: False
 
 system_content: You are a helpful assistant that simplifies commit messages.
 user_content_template: |-
   Code changes:
   {diff}
-  
   Original message: {message}
-  
-  Create a simplified commit message following these strict rules:
-  1. Maximum 16 words
-  2. Use only these verbs: add, update, remove, fix, refactor
-  3. Reference only code elements visible in the diff
-  4. Format: "<verb> <optional code element> <brief detail>" e.g. Add documentation for unit testing
-  5. Exclude all contextual information not visible in the code changes
-  6. Focus on the technical change, not the purpose or impact
-  7. Use consistent terminology for similar changes
-  8. Use only one line or sentence.
-  9. Output only the simplified message without any explanation or formatting.
-#max_msg_token_count: 64
-#max_prompt_token_count: 1000
-max_msg_token_count: 24
+  Create a simplified commit message following these strict rules
+  - Maximum 16 words
+  - Use only these verbs: add, update, remove, fix, refactor
+  - Reference only code elements visible in the diff
+  - Format: "<verb> <optional code element> <brief detail>" e.g. Add documentation for unit testing
+  - Exclude all contextual information not visible in the code changes
+  - Focus on the technical change, not the purpose or impact
+  - Use consistent terminology for similar changes
+  - Use one sentence
+  - Output only the simplified message without any explanation or formatting
+max_msg_token_count: 16
 max_prompt_token_count: 1000
 
+# Create a HuggingFace Hub access token and set the environment variable HUGGINGFACE_ACCESS_TOKEN to the token
+huggingface_access_token: ${oc.env:HUGGINGFACE_ACCESS_TOKEN}
+huggingface_repo: UHHBois/commit-chronicle-dataset-simplified
 
-huggingface_repo:
-
+# ################
 # paths
-# ############
+# ###############
 
 # path to root directory
 # this requires PROJECT_ROOT environment variable to exist

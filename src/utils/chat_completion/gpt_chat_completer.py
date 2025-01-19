@@ -21,7 +21,7 @@ from ..more_utils import load_jsonl_as_dataset
 
 class GPTChatCompleter(LLMChatCompleter):
     """
-    A chat completion handler for OpenAI's GPT models.
+    A chat completion handler for OpenAI's GPT models or any API-compatible models.
 
     This class facilitates interactions with OpenAI's GPT API for chat-based
     completions. It supports token counting, batch processing, and cost estimation.
@@ -31,6 +31,8 @@ class GPTChatCompleter(LLMChatCompleter):
             pricing per million tokens.
         api_key (str): The OpenAI API key for authentication.
         model (str): The name of the GPT model to use.
+        base_url (str): The base URL of the OpenAI-compatible API.
+        tokenizer (AutoTokenizer | None): The Hugging Face tokenizer for the model.
         temperature (float): The temperature setting for response generation.
         max_prompt_token_count (int): Maximum token count allowed for the prompt.
         max_response_token_count (int): Maximum token count allowed for the response.
@@ -66,6 +68,12 @@ class GPTChatCompleter(LLMChatCompleter):
             max_prompt_token_count (int): The maximum number of tokens allowed in the input prompt.
             max_response_token_count (int): The maximum number of tokens allowed in the model's response.
             batch_limit_tpd (int): The maximum number of tokens that can be processed per day in batch mode.
+            tokenizer (str | None, optional): The full Hugging Face tokenizer name used by the model.
+                This is useful if using an API (different baseurl) that is API-compatible with OpenAI's.
+                For example, if using DeepSeekV3, this should be set to 'deepseek-ai/DeepSeek-V3'.
+            base_url (str | None, optional): The OpenAI API (or similar API) base URL used by the model.
+                Defaults to None (for OpenAI's API). This can be set to url with an API that is compatible to OpenAI's.
+                For instance, to use DeepSeek's API, this should be 'https://api.deepseek.com/v1'.
             num_proc (int | None, optional): Number of processes to use for batch operations. Defaults to available CPU count.
 
         Raises:

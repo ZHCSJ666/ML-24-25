@@ -2,12 +2,13 @@ import json
 import multiprocessing as mp
 import random
 from dataclasses import dataclass
+from math import ceil
 from pathlib import Path
 from typing import Any, Literal
 
 import hydra
 import rootutils
-from datasets import DatasetDict, load_dataset
+from datasets import DatasetDict, load_dataset, concatenate_datasets
 from huggingface_hub import login
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
@@ -26,6 +27,7 @@ class MainDictConfig:
     split: str
     languages: list[str]
     change_types: list[str]
+    limit_modify_change_types: float
     diff_line_sep: str
 
     chat_completer: LLMChatCompleter
@@ -43,7 +45,8 @@ class MainDictConfig:
     prompt_testing_example_index: int
 
     debug_run: bool
-    huggingface_repo: str | None = None
+    huggingface_repo: str
+    huggingface_access_token: str
 
 
 def run_completion(example, completer: LLMChatCompleter):
@@ -70,8 +73,9 @@ def ensure_paths(cfg: DictConfig, split_names: list[str]):
     # create directory and config file for filtered data
     config = {
         "languages": sorted(cfg["languages"]),
-        "change_types": sorted(cfg["change_types"]),
+        "change_types": sorted(cfg["change_types"] or {}),
         "diff_line_sep": cfg["diff_line_sep"],
+        "limit_modify_change_types": cfg["limit_modify_change_types"],
     }
     hashed_config = hash_dict(config)
     filtered_data_paths = [
@@ -89,6 +93,7 @@ def ensure_paths(cfg: DictConfig, split_names: list[str]):
         "user_content_template": cfg["user_content_template"],
         "max_prompt_token_count": cfg["max_prompt_token_count"],
         "chat_completer": cfg["chat_completer"],
+        "debug_run": cfg["debug_run"],
     }
     hashed_config = hash_dict(config)
     working_dirs = [output_dir / hashed_config / split for split in split_names]
@@ -121,7 +126,7 @@ def validate_user_content_template(message_template: str):
     assert "{message}" in message_template
 
 
-def process_example(
+def map_example_to_request(
     example,
     completer: LLMChatCompleter,
     system_content: str,
@@ -154,6 +159,10 @@ def process_example(
         max_diff_token_count > 0
     ), f"Max diff token count must be more than zero, num_msg_tokens={msg_token_count}, num_other_tokens={non_diff_msg_token_count}"
 
+    # truncate message to `msg_token_count`
+    msg_tokens = completer.encode(message)[:msg_token_count]
+    message = completer.decode(msg_tokens)
+
     # truncate diff to `max_diff_token_count`
     diff_tokens = completer.encode(diff)
     orig_diff_token_count = len(diff_tokens)
@@ -165,12 +174,22 @@ def process_example(
         "user_content": user_content_template.format(diff=diff, message=message),
     }
     if return_token_stats:
-        output["num_diff_tokens"] = orig_diff_token_count
-        output["num_msg_tokens"] = orig_msg_token_count
-        output["num_other_tokens"] = non_diff_msg_token_count
-        output["num_total_tokens"] = (
-            orig_diff_token_count + orig_msg_token_count + non_diff_msg_token_count
-        )
+        output["token_stats"] = {
+            "original": {
+                "num_diff_tokens": orig_diff_token_count,
+                "num_msg_tokens": orig_msg_token_count,
+                "non_diff_msg_tokens": non_diff_msg_token_count,
+                "num_total_tokens": orig_diff_token_count
+                + orig_msg_token_count
+                + non_diff_msg_token_count,
+            },
+            "truncated": {
+                "num_diff_tokens": len(diff_tokens),
+                "num_msg_tokens": len(msg_tokens),
+                "non_diff_msg_tokens": non_diff_msg_token_count,
+                "num_total_tokens": len(diff_tokens) + len(msg_tokens) + non_diff_msg_token_count,
+            },
+        }
     return output
 
 
@@ -200,6 +219,7 @@ def preprocess_mods(mods: list[dict[str, str]], line_sep: str) -> str:
         elif mod["change_type"] == "COPY":
             file_diff = f"copy from {mod['old_path']}{line_sep}copy to {mod['new_path']}"
         else:
+            assert mod["change_type"] == "MODIFY"
             file_diff = f"{mod['new_path']}"
         diff += file_diff + line_sep + mod["diff"]
     return diff
@@ -221,11 +241,33 @@ def simplify_dataset_by_split(
         filtered_dataset = load_dataset(
             "JetBrains-Research/commit-chronicle", "default", split=split
         )
+        change_types = set(cfg.change_types or [])
+        limit_modify_change_types = cfg.limit_modify_change_types < 1 and (
+            not change_types or "MODIFY" in change_types
+        )
         filtered_dataset = filtered_dataset.filter(
             filter_example,
-            fn_kwargs={"languages": cfg.languages, "change_types": cfg.change_types},
+            fn_kwargs={"languages": cfg.languages, "change_types": change_types},
             num_proc=mp.cpu_count(),
         )
+        if limit_modify_change_types:
+            others = filtered_dataset.filter(
+                filter_example,
+                fn_kwargs={
+                    "languages": cfg.languages,
+                    "change_types": ["ADD", "DELETE", "RENAME", "UNKNOWN", "COPY"],
+                },
+                num_proc=mp.cpu_count(),
+            )
+            mod_only = filtered_dataset.filter(
+                filter_example,
+                fn_kwargs={"languages": cfg.languages, "change_types": ["MODIFY"]},
+                num_proc=mp.cpu_count(),
+            )
+            mod_only = mod_only.select(
+                range(int(ceil(len(mod_only) * cfg.limit_modify_change_types)))
+            )
+            filtered_dataset = concatenate_datasets([others, mod_only])
         filtered_dataset = filtered_dataset.map(
             lambda example, diff_line_sep: {
                 "diff": preprocess_mods(example["mods"], diff_line_sep)
@@ -248,7 +290,7 @@ def simplify_dataset_by_split(
             else cfg.prompt_testing_example_index
         )
         dataset = filtered_dataset.select([idx]).map(
-            process_example,
+            map_example_to_request,
             fn_kwargs={
                 "system_content": cfg.system_content,
                 "user_content_template": cfg.user_content_template,
@@ -274,9 +316,7 @@ def simplify_dataset_by_split(
             logger.debug(f"Diff: {example['diff']}")
             logger.debug(f"Message (Simplified): {response.content.strip()}")
             logger.debug(f"Message (Original): {example['message']}")
-            logger.debug(
-                f"Original token stats: num_msg_tokens={example['num_msg_tokens']}, num_diff_tokens={example['num_diff_tokens']}, num_other_tokens={example['num_other_tokens']}, num_total_tokens={example['num_total_tokens']}"
-            )
+            logger.debug(f"Token stats:\n{json.dumps(example['token_stats'], indent=4)}")
             logger.debug(f"{response.prompt_token_count} prompt tokens counted by the LLM.")
             return
 
@@ -292,7 +332,7 @@ def simplify_dataset_by_split(
             dataset = load_jsonl_as_dataset(api_request_path)
         else:
             dataset = filtered_dataset.map(
-                process_example,
+                map_example_to_request,
                 fn_kwargs={
                     "system_content": cfg.system_content,
                     "user_content_template": cfg.user_content_template,
@@ -348,7 +388,7 @@ def simplify_dataset_by_split(
         #     save_checkpoint(checkpoint_path, i)
     else:
         dataset = filtered_dataset.map(
-            process_example,
+            map_example_to_request,
             fn_kwargs={
                 "system_content": cfg.system_content,
                 "user_content_template": cfg.user_content_template,
@@ -410,11 +450,10 @@ def main(config: DictConfig):
             for split_name, output_dataset_path in zip(split_names, split_final_dataset_paths)
         }
         dataset_hf = DatasetDict(dataset_dict)
-        if cfg.debug_run:
-            dataset_hf.save_to_disk(combined_final_output_path)
-            logger.success(f"Debug run dataset saved to '{combined_final_output_path}'")
-        else:
-            login()  # This will prompt you to enter your access token
+        dataset_hf.save_to_disk(combined_final_output_path)
+        logger.success(f"Dataset saved to '{combined_final_output_path}'")
+        if not cfg.debug_run:
+            login(token=cfg.huggingface_access_token)
             dataset_hf.push_to_hub(cfg.huggingface_repo, private=False)
             logger.success(f"Dataset successfully pushed to '{cfg.huggingface_repo}'")
 
