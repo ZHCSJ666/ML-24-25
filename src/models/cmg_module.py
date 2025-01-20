@@ -249,7 +249,7 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
                 "lr_scheduler": {
                     "scheduler": scheduler,
                     "monitor": "val/loss",
-                    "interval": "epoch",
+                    "interval": "step",
                     "frequency": 1,
                 },
             }

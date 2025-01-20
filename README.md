@@ -134,6 +134,38 @@ python src/train.py experiment=pythia logger=tensorboard +trainer.overfit_batche
 # to train on full dataset
 python src/train.py experiment=pythia logger=tensorboard
 ```
+
+## Important Questions and Answers
+
+
+##### 1. What NN architectures did we experiment with?
+
+- T5-efficient with config modified reducing number of parameters to 7.3M (t5-efficient-extra-tiny)
+- Decoder-only model (pythia)
+
+##### 2. What is the size of the dataset used for training?
+
+The number of tokens trained on is at least 20 times the number of parameters in the t5-efficient-extra-tiny model.
+The rationale behind the number of tokens used is explained [here](https://arxiv.org/abs/2406.12907).
+See [Chinchilla data-optimal scaling laws: In plain English](https://lifearchitect.ai/chinchilla/) for explanation of the paper in plain English.
+
+##### 3. What does the dataset looks like?
+
+It's a simplified version of the original Commit Chronicle dataset from Jetbrains. It uses only Golang, 10% of changes with MODIFY changes types,
+and all other change types.
+
+The commit message was simplified using a local version of qwen2.5-coder-7b with the help of Ollama. Simplifying the selected fraction of
+the original dataset took around **12 hours**.
+
+##### 4. What tokenizer was used?
+
+The tokenizer used for training the t5 model is the T5-efficient tokenizer from Hugging Face.
+
+TODO: Need to go into more detail about how the tokenizer works.
+
+##### 5. How long did training take? How many epochs?
+
+
 ## How to run
 
 Training examples with [t5-efficient-tiny](configs/experiment/t5-efficient-tiny.yaml) experiment configuration

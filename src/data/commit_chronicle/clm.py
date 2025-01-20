@@ -272,7 +272,10 @@ def batch_tokenize_function(
     assert tokenizer.sep_token is not None
 
     input_ids_batch = tokenizer(
-        text=[f"{examples['diff'][idx]} {tokenizer.sep_token} {examples['msg'][idx]}" for idx in range(len(examples["diff"]))],
+        text=[
+            f"{examples['diff'][idx]} {tokenizer.sep_token} {examples['msg'][idx]}"
+            for idx in range(len(examples["diff"]))
+        ],
         truncation=False,
         add_special_tokens=False,
         return_attention_mask=False,

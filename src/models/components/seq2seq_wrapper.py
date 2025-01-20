@@ -2,7 +2,6 @@ from typing import Any, Optional
 
 import torch.nn as nn
 from transformers import (
-    AutoConfig,
     EncoderDecoderConfig,
     EncoderDecoderModel,
     PreTrainedModel,
@@ -99,8 +98,3 @@ class Seq2SeqWrapper(nn.Module):
             # decoder_attention_mask=batch.decoder_attention_mask,
             **generation_kwargs,
         )
-
-    @staticmethod
-    def get_decoder_start_token_id(name_or_path):
-        config = AutoConfig.from_pretrained(name_or_path)
-        return config.decoder_start_token_id
