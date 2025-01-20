@@ -168,7 +168,7 @@ class CommitChronicleCMGDataModule(LightningDataModule):
 
         def _load_dataset(split):
             dataset = load_from_disk(self.tokenized_data_dir / split)
-            dataset.set_format("torch")
+            # dataset.set_format("torch")
             return dataset
 
         # load datasets only if not loaded already

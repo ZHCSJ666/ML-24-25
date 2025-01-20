@@ -4,11 +4,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import hydra
 import lightning as L
 import rootutils
+import torch
 from lightning import Callback, LightningModule, Trainer, LightningDataModule
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
 
-
+torch.set_float32_matmul_precision("medium")
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
 # the setup_root above is equivalent to:

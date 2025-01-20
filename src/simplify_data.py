@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 import hydra
 import rootutils
+import torch
 from datasets import DatasetDict, load_dataset, concatenate_datasets
 from huggingface_hub import login
 from loguru import logger
@@ -19,6 +20,7 @@ from src.utils.more_utils import (
     load_jsonl_as_dataset,
 )
 
+torch.set_float32_matmul_precision("medium")
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 
 
