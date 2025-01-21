@@ -4,9 +4,7 @@ from typing import Any, Callable, Dict, List, Optional
 import torch
 import torch.nn as nn
 from lightning import LightningModule
-from lightning.pytorch.loggers.tensorboard import TensorBoardLogger
-from lightning.pytorch.loggers.wandb import WandbLogger
-from torchmetrics import MetricCollection
+from torchmetrics import MetricCollection, SumMetric
 from transformers import PreTrainedTokenizerFast
 from transformers.modeling_outputs import Seq2SeqLMOutput
 
@@ -15,9 +13,10 @@ from src.metrics import MRR, Accuracy
 from src.metrics.bleu import SacreBLEUScore
 from src.metrics.rouge import ROUGEScore
 from src.models.components.encoder_decoder import EncoderDecoder
+from src.utils.more_utils import TextLoggingMixin
 
 
-class MaskedLanguageModelingModule(LightningModule):
+class MaskedLanguageModelingModule(LightningModule, TextLoggingMixin):
     """Git commit message generation module.
 
     Docs:
@@ -79,6 +78,15 @@ class MaskedLanguageModelingModule(LightningModule):
         self.val_metrics = metrics.clone(prefix="val/")
         self.test_metrics = metrics.clone(prefix="test/")
 
+        token_metrics = MetricCollection(
+            {
+                "num_processed_tokens": SumMetric(),
+            }
+        )
+        self.train_token_metrics = token_metrics.clone(prefix="train/")
+        self.val_token_metrics = token_metrics.clone(prefix="val/")
+        self.test_token_metrics = token_metrics.clone(prefix="test/")
+
         self.msg_tokenizer: Optional[PreTrainedTokenizerFast] = None
         self.diff_tokenizer: Optional[PreTrainedTokenizerFast] = None
 
@@ -103,6 +111,9 @@ class MaskedLanguageModelingModule(LightningModule):
         # so it's worth to make sure validation metrics don't store results from these checks
         self.val_metrics.reset()
         self.val_batch = None
+        self.train_token_metrics.reset()
+        self.val_token_metrics.reset()
+        self.test_token_metrics.reset()
 
     def common_step(self, batch: BatchTrain, split: str) -> Optional[torch.Tensor]:
         """Perform a single model step on a batch of data.
@@ -147,6 +158,18 @@ class MaskedLanguageModelingModule(LightningModule):
             batch_size=batch_size,
         )
 
+        # token metrics
+        num_tokens_processed = len(batch.encoder_input_ids)
+        metric = getattr(self, f"{split}_token_metrics")
+        metric(num_tokens_processed)
+        self.log_dict(
+            metric.compute(),  # don't pass the metric object to prevent lightning from resetting it here
+            on_step=True,
+            on_epoch=False,
+            prog_bar=True,
+            batch_size=1,
+        )
+
         if self.hparams.val_text_metrics_every_step and split in ["val"]:
             self.evaluate_text(batch, split, log_text=False)
 
@@ -185,23 +208,34 @@ class MaskedLanguageModelingModule(LightningModule):
         :param batch: A test batch.
         :param batch_idx: Index of the batch.
         """
-        self.evaluate_text(
-            BatchTest(
-                encoder_input_ids=batch["input_ids"],
-                encoder_attention_mask=batch.get("attention_mask"),
-                targets=batch.get("labels").long(),
-                decoder_input_ids=None,
-                decoder_attention_mask=None,
-                labels=None,
-                prefixes=None,
-            ),
-            "test",
+        batch = BatchTest(
+            encoder_input_ids=batch["input_ids"],
+            encoder_attention_mask=batch.get("attention_mask"),
+            targets=batch.get("labels").long(),
+            decoder_input_ids=None,
+            decoder_attention_mask=None,
+            labels=None,
+            prefixes=None,
         )
+        self.evaluate_text(batch, "test")
+        num_tokens_processed = len(batch.encoder_input_ids)
+        self.test_token_metrics(num_tokens_processed)
+        self.log_dict(
+            self.test_token_metrics.compute(),  # don't pass the metric object to prevent lightning from resetting it here
+            on_step=True,
+            on_epoch=False,
+            prog_bar=True,
+            batch_size=1,
+        )
+
+    def on_test_epoch_end(self) -> None:
+        self.test_token_metrics.reset()
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
         self.evaluate_text(self.train_batch, "train")
         self.train_batch = None
+        self.train_token_metrics.reset()
 
     def validation_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
         """Validation step.
@@ -226,6 +260,7 @@ class MaskedLanguageModelingModule(LightningModule):
         if not self.hparams.val_text_metrics_every_step:
             self.evaluate_text(self.val_batch, "val")
         self.val_batch = None
+        self.val_token_metrics.reset()
 
     def setup(self, stage: str) -> None:
         """Lightning hook that is called at the beginning of fit (train + validate), validate,
@@ -239,14 +274,14 @@ class MaskedLanguageModelingModule(LightningModule):
 
         if self.msg_tokenizer is None or self.diff_tokenizer is None:
             datamodule = self.trainer.datamodule
-            self.msg_tokenizer = datamodule.msg_tokenizer
-            self.diff_tokenizer = datamodule.diff_tokenizer
+            self.msg_tokenizer = datamodule.tokenizer
+            self.diff_tokenizer = datamodule.tokenizer
 
-        if not isinstance(self.net, nn.Module):
-            self.net = self.hparams.net(
-                encoder_vocab_size=self.diff_tokenizer.vocab_size,
-                decoder_vocab_size=self.msg_tokenizer.vocab_size,
-            )
+        # if not isinstance(self.net, nn.Module):
+        #     self.net = self.hparams.net(
+        #         encoder_vocab_size=self.diff_tokenizer.vocab_size,
+        #         decoder_vocab_size=self.msg_tokenizer.vocab_size,
+        #     )
 
         if self.hparams.compile and stage == "fit":
             self.net = torch.compile(self.net)
@@ -417,46 +452,6 @@ class MaskedLanguageModelingModule(LightningModule):
         """
         return tuple(self.msg_tokenizer.batch_decode(arg, **kwargs) for arg in args)
 
-    def log_text(self, prefix, results: List[Dict[str, str]], num_results: int = 4) -> None:
-        """Log generated git commit message results.
-
-        This method only supports TensorBoard and Wandb at the moment.
-        """
-        random.shuffle(results)
-        self.log_text_tensorboard(prefix, results, num_results)
-        self.log_text_wandb(prefix, results, num_results)
-
-    def log_text_tensorboard(self, prefix, results: List[Dict[str, str]], num_results) -> None:
-        tb_logger: Optional[TensorBoardLogger] = None
-        for logger in self.loggers:
-            if isinstance(logger, TensorBoardLogger):
-                tb_logger = logger
-                break
-        if tb_logger is None:
-            return
-
-        writer = tb_logger.experiment
-        for result in results[:num_results]:
-            for key, value in result.items():
-                writer.add_text(prefix + key, value, self.global_step)
-
-    def log_text_wandb(self, prefix, results: List[Dict[str, str]], num_results) -> None:
-        wandb_logger: Optional[WandbLogger] = None
-        for logger in self.loggers:
-            if isinstance(logger, WandbLogger):
-                wandb_logger = logger
-                break
-        if wandb_logger is None:
-            return
-
-        columns = list(results[0].keys())
-        data = [list(result.values()) for result in results[:num_results]]
-        wandb_logger.log_text(prefix + "text", columns=columns, data=data, step=self.global_step)
-
 
 def is_valid_tensor(tensor):
     return not torch.any(torch.isnan(tensor) | torch.isinf(tensor))
-
-
-if __name__ == "__main__":
-    _ = MaskedLanguageModelingModule(None, None, None, None)

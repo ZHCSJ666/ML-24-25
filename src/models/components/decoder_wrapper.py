@@ -1,8 +1,11 @@
 import torch.nn as nn
 from transformers import AutoModelForCausalLM
 from transformers.modeling_outputs import CausalLMOutputWithPast
-
+import os
 from src.data.types import Batch
+
+# https://stackoverflow.com/a/53014308/7121776
+os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 
 
 class DecoderWrapper(nn.Module):

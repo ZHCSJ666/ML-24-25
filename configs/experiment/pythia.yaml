@@ -24,6 +24,7 @@ model:
 
 
 data:
+  change_types:
   batch_size: 16
   tokenizer:
     name_or_path: EleutherAI/pythia-14m # Salesforce/codet5-small

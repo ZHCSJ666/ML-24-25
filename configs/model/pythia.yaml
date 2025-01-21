@@ -22,7 +22,7 @@ scheduler:
 compile: false
 
 net:
-  _target_: models.components.decoder_wrapper.DecoderWrapper
+  _target_: src.models.components.decoder_wrapper.DecoderWrapper
   tokenizer: ???
   # This config was copied or modified from https://huggingface.co/EleutherAI/pythia-14m/blob/main/config.json
   # See https://huggingface.co/docs/transformers/en/model_doc/gpt_neox#transformers.GPTNeoXConfig

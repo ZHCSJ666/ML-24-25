@@ -7,6 +7,8 @@ import wandb
 from datasets import Dataset, load_dataset
 from lightning.pytorch.loggers import TensorBoardLogger
 
+wandb.Table.MAX_ROWS = 50_000
+
 
 class TextLoggingMixin:
     _wandb_tables: dict[str, wandb.Table]
