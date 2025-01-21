@@ -1,4 +1,4 @@
-_target_: src.data.commit_chronicle.CommitChronicleCMGDataModule
+_target_: src.data.CommitChronicleSeq2SeqDataModule
 data_dir: ${paths.data_dir}commit-chronicle
 languages: ["Go"]
 change_types: ["ADD"]

@@ -10,8 +10,9 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import PreTrainedTokenizerFast, DataCollatorForLanguageModeling
 
+from src.data.types import Batch
 from src.data.commit_chronicle.preprocessor import CommitChroniclePreprocessor
-from utils.more_utils import hash_dict
+from src.utils.more_utils import hash_dict
 
 
 class CommitChronicleCLMDataModule(LightningDataModule):
@@ -200,10 +201,19 @@ class DataCollatorWrapper:
         self.collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 
     def __call__(self, batch):
-        targets = [example.pop("target", None) for example in batch]
+        targets = (
+            [example.pop("target", None) for example in batch]
+            if batch[0].get("target") is not None
+            else None
+        )
         outputs = self.collator(batch)
         outputs["target"] = targets
-        return outputs
+        return Batch(
+            input_ids=outputs["input_ids"],
+            attention_mask=outputs["attention_mask"],
+            labels=outputs["labels"].long(),
+            targets=targets,
+        )
 
 
 def batch_tokenize_function(

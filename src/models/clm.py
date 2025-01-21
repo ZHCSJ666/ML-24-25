@@ -7,7 +7,7 @@ from lightning import LightningModule
 from torchmetrics import MetricCollection, SumMetric
 from transformers import PreTrainedTokenizerFast
 
-from src.data.types import Batch, BatchTest, BatchTrain
+from src.data.types import Batch
 from src.metrics import MRR, Accuracy
 from src.metrics.bleu import SacreBLEUScore
 from src.metrics.rouge import ROUGEScore
@@ -92,8 +92,8 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
         self.tokenizer: Optional[PreTrainedTokenizerFast] = None
 
         # Used to store temp batch data to be used for logging at the end of epochs
-        self.train_batch: Optional[BatchTrain] = None
-        self.val_batch: Optional[BatchTrain] = None
+        self.train_batch: Optional[Batch] = None
+        self.val_batch: Optional[Batch] = None
 
     def forward(self, batch: Batch) -> dict[str, torch.Tensor]:
         """Forward pass of the model.
@@ -116,7 +116,7 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
         self.val_token_metrics.reset()
         self.test_token_metrics.reset()
 
-    def common_step(self, batch: BatchTrain, split: str) -> Optional[torch.Tensor]:
+    def common_step(self, batch: Batch, split: str) -> Optional[torch.Tensor]:
         """Perform a single model step on a batch of data.
 
         :param batch: A batch of data.
@@ -134,7 +134,7 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
         if not is_valid_tensor(logits) or not is_valid_tensor(loss):
             return None
 
-        batch_size = len(batch.encoder_input_ids)
+        batch_size = len(batch.input_ids)
         self.log(
             f"{split}/loss",
             loss,
@@ -157,7 +157,7 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
         )
 
         # token metrics
-        num_tokens_processed = batch.encoder_attention_mask.sum().item()
+        num_tokens_processed = batch.attention_mask.sum().item()
         metric = getattr(self, f"{split}_token_metrics")
         metric(num_tokens_processed)
         self.log_dict(
@@ -180,48 +180,24 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
 
         return loss
 
-    def training_step(
-        self, batch: dict[str, torch.Tensor], batch_idx: int
-    ) -> Optional[torch.Tensor]:
+    def training_step(self, batch: Batch, batch_idx: int) -> Optional[torch.Tensor]:
         """Training step.
 
         :param batch: A training batch.
         :param batch_idx: Index of the batch.
         :return: Dictionary containing the loss.
         """
-        return self.common_step(
-            BatchTrain(
-                encoder_input_ids=batch["input_ids"],
-                encoder_attention_mask=batch["attention_mask"],
-                decoder_input_ids=None,
-                decoder_attention_mask=None,
-                labels=batch["labels"].long(),
-            ),
-            "train",
-        )
+        return self.common_step(batch, "train")
 
-    def test_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
+    def test_step(self, batch: Batch, batch_idx: int) -> None:
         """Test step.
 
         :param batch: A test batch.
         :param batch_idx: Index of the batch.
         """
-        batch = BatchTest(
-            encoder_input_ids=batch["input_ids"],
-            encoder_attention_mask=batch.get("attention_mask"),
-            targets=batch["target"],
-            decoder_input_ids=None,
-            decoder_attention_mask=None,
-            labels=None,
-            prefixes=None,
-        )
-        self.evaluate_text(
-            batch,
-            "test",
-            crop_context=True,
-        )
+        self.evaluate_text(batch, "test", crop_context=True)
 
-        num_tokens_processed = batch.encoder_attention_mask.sum().item()
+        num_tokens_processed = batch.attention_mask.sum().item()
         self.test_token_metrics(num_tokens_processed)
         self.log_dict(
             self.test_token_metrics.compute(),  # don't pass the metric object to prevent lightning from resetting it here
@@ -240,22 +216,13 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
         self.train_batch = None
         self.train_token_metrics.reset()
 
-    def validation_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
+    def validation_step(self, batch: Batch, batch_idx: int) -> None:
         """Validation step.
 
         :param batch: A validation batch.
         :param batch_idx: Index of the batch.
         """
-        self.common_step(
-            BatchTrain(
-                encoder_input_ids=batch["input_ids"],
-                encoder_attention_mask=batch.get("attention_mask"),
-                decoder_input_ids=None,
-                decoder_attention_mask=None,
-                labels=batch["labels"].long(),
-            ),
-            "val",
-        )
+        self.common_step(batch, "val")
 
     def on_validation_epoch_end(self) -> None:
         """Lightning hook that is called when a validation epoch ends."""
@@ -276,6 +243,7 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
         """
 
         if self.tokenizer is None:
+            # noinspection PyUnresolvedReferences
             datamodule = self.trainer.datamodule
             self.tokenizer = datamodule.tokenizer
 
@@ -341,7 +309,7 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
 
         # leave only generated part (crop context)
         if crop_context:
-            predictions = predictions[:, batch.encoder_input_ids.shape[1] :]
+            predictions = predictions[:, batch.input_ids.shape[1] :]
 
         # decode & postprocess data & log results
         string_results = self._postprocess_generated(batch, predictions)
@@ -358,7 +326,7 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
             on_step=False,
             on_epoch=True,
             prog_bar=True,
-            batch_size=len(batch.encoder_input_ids),
+            batch_size=len(batch.input_ids),
         )
 
         if is_train:
@@ -377,9 +345,7 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
         kwargs = kwargs or self.hparams.generation_kwargs or {}
 
         if isinstance(self.net, EncoderDecoder):
-            return self.net.generate(
-                batch,
-            )
+            return self.net.generate(batch)
         return self.net.generate(
             batch,
             **kwargs,
@@ -401,14 +367,14 @@ class CausalLanguageModelingModule(LightningModule, TextLoggingMixin):
         Returns:
             A dict with decoded sources/predictions.
         """
-        decoded_inputs = self.decode(batch.encoder_input_ids, skip_special_tokens=True)[0]
+        decoded_inputs = self.decode(batch.input_ids, skip_special_tokens=True)[0]
         decoded_preds = self.decode(predictions, skip_special_tokens=True)[0]
 
-        if batch.labels is not None:
+        if batch.targets is not None:
+            targets = batch.targets
+        elif batch.labels is not None:
             targets = batch.labels.clone()
             targets = torch.where(targets == -100, self.tokenizer.pad_token_id, targets)
-        elif isinstance(batch, BatchTest) and batch.targets is not None:
-            targets = batch.targets
         else:
             raise ValueError(f"No target set")
 

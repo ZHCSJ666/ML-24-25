@@ -9,11 +9,11 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import PreTrainedTokenizerFast, DataCollatorForSeq2Seq
 
 from src.data.commit_chronicle.preprocessor import CommitChroniclePreprocessor
-from src.data.types import BatchTrain
+from src.data.types import Batch
 from src.utils.more_utils import hash_dict
 
 
-class CommitChronicleCMGDataModule(LightningDataModule):
+class CommitChronicleSeq2SeqDataModule(LightningDataModule):
     """Commit Chronicle dataset `LightningDataModule` for commit message generation posed as a sequence-to-sequence task.
 
     The Commit Chronicle dataset was introduced in the paper "From Commit Message Generation to History-Aware Commit Message Completion", ASE 2023.
@@ -110,13 +110,17 @@ class CommitChronicleCMGDataModule(LightningDataModule):
     @property
     def train_val_collator(self):
         if self._train_val_collator is None:
-            self._train_val_collator = _DataCollator(tokenizer=self.diff_tokenizer)
+            self._train_val_collator = DataCollatorWrapper(
+                tokenizer=self.diff_tokenizer, is_train_val=True
+            )
         return self._train_val_collator
 
     @property
     def test_collator(self):
         if self._test_collator is None:
-            self._test_collator = _DataCollator(tokenizer=self.diff_tokenizer)
+            self._test_collator = DataCollatorWrapper(
+                tokenizer=self.diff_tokenizer, is_train_val=False
+            )
         return self._test_collator
 
     def prepare_data(self) -> None:
@@ -214,23 +218,29 @@ class CommitChronicleCMGDataModule(LightningDataModule):
         )
 
 
-class _DataCollator:
-    def __init__(self, tokenizer: PreTrainedTokenizerFast):
+class DataCollatorWrapper:
+    def __init__(self, tokenizer: PreTrainedTokenizerFast, is_train_val: bool):
         self.collator = DataCollatorForSeq2Seq(tokenizer=tokenizer)
+        self.is_train_val = is_train_val
 
     def __call__(self, examples):
         batch = self.collator(examples)
-        return BatchTrain(
-            encoder_input_ids=batch["input_ids"],
-            encoder_attention_mask=batch.get("attention_mask"),
-            decoder_input_ids=batch.get("decoder_input_ids"),
+        return Batch(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            # the decoder_input_ids and decoder_attention_mask are automatically calculated from the labels by the
+            # HuggingFace model, so we can have them as None here.
+            # See https://huggingface.co/docs/transformers/glossary#decoder-input-ids
+            decoder_input_ids=None,
             decoder_attention_mask=None,
-            labels=batch.get("labels"),
+            labels=batch["labels"],
         )
 
 
 def tokenize_function(examples, diff_tokenizer, msg_tokenizer, diff_max_len, msg_max_len):
-    inputs = diff_tokenizer(examples["diff"], max_length=diff_max_len, truncation=True)
-    labels = msg_tokenizer(examples["msg"], max_length=msg_max_len, truncation=True)
+    # See https://huggingface.co/docs/transformers/en/tasks/summarization#preprocess
+    inputs = diff_tokenizer(text=examples["diff"], max_length=diff_max_len, truncation=True)
+    # If u confused about text_target argument, see https://stackoverflow.com/a/76167575/7121776
+    labels = msg_tokenizer(text_target=examples["msg"], max_length=msg_max_len, truncation=True)
     inputs["labels"] = labels["input_ids"]
     return inputs

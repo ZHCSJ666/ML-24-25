@@ -5,10 +5,10 @@ from typing import List, Optional, Tuple
 import torch
 
 from .data_collator_base import DataCollatorBase
-from ...types import BatchTrain, SingleExample
+from ...types import Batch, SingleExample
 
 
-class DataCollatorTrain(DataCollatorBase[BatchTrain]):
+class DataCollatorTrain(DataCollatorBase):
     """This class is used to construct batches out of lists of examples in training/validation
     setting.
 
@@ -55,7 +55,7 @@ class DataCollatorTrain(DataCollatorBase[BatchTrain]):
         self.shift_labels = shift_labels
         self.decoder_start_token_id = decoder_start_token_id
 
-    def __call__(self, examples: List[SingleExample]) -> BatchTrain:
+    def __call__(self, examples: List[SingleExample]) -> Batch:
         """Processes a list of examples into a BatchTrain object."""
         encoder_input_ids, encoder_attention_mask = self._process_encoder_input(examples=examples)
 
@@ -64,10 +64,10 @@ class DataCollatorTrain(DataCollatorBase[BatchTrain]):
         )
 
         return BatchTrain(
-            encoder_input_ids=encoder_input_ids,
-            encoder_attention_mask=encoder_attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
+            input_ids=encoder_input_ids,
+            attention_mask=encoder_attention_mask,
+            msg_input_ids=decoder_input_ids,
+            msg_attention_mask=decoder_attention_mask,
             labels=labels,
         )
 
@@ -102,7 +102,7 @@ class DataCollatorTrain(DataCollatorBase[BatchTrain]):
         Returns:
             Tuple of three tensors: input ids, attention masks, labels.
         """
-        message_inputs: List[List[int]] = [example.msg_input_ids for example in examples]
+        message_inputs: List[List[int]] = [example.decoder_input_ids for example in examples]
 
         all_msg_ids: List[torch.Tensor] = []
         all_msg_masks: List[torch.Tensor] = []

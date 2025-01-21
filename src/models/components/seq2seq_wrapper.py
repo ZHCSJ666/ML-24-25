@@ -1,11 +1,13 @@
 from typing import Any, Optional
 
+import torch
 import torch.nn as nn
 from transformers import (
     EncoderDecoderConfig,
     EncoderDecoderModel,
     PreTrainedModel,
 )
+from transformers.modeling_outputs import Seq2SeqLMOutput
 
 from src.data.types import Batch
 
@@ -67,14 +69,15 @@ class Seq2SeqWrapper(nn.Module):
 
             self.model = EncoderDecoderModel(encoder=encoder, decoder=decoder, config=config)
 
-    def forward(self, batch: Batch) -> Any:
-        return self.model(
-            input_ids=batch.encoder_input_ids,
-            attention_mask=batch.encoder_attention_mask,
+    def forward(self, batch: Batch) -> dict[str, torch.Tensor]:
+        output: Seq2SeqLMOutput = self.model(
+            input_ids=batch.input_ids,
+            attention_mask=batch.attention_mask,
             decoder_input_ids=batch.decoder_input_ids,
             decoder_attention_mask=batch.decoder_attention_mask,
             labels=batch.labels,
         )
+        return {"logits": output.logits, "loss": output.loss}
 
     def generate(
         self,
@@ -87,8 +90,8 @@ class Seq2SeqWrapper(nn.Module):
         **generation_kwargs,
     ) -> Any:
         return self.model.generate(
-            input_ids=batch.encoder_input_ids,
-            attention_mask=batch.encoder_attention_mask,
+            input_ids=batch.input_ids,
+            attention_mask=batch.attention_mask,
             max_length=max_length,
             num_beams=num_beams,
             early_stopping=early_stopping,

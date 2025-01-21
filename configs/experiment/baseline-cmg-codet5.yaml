@@ -18,7 +18,7 @@ trainer:
 model:
   _target_: src.models.CommitMessageGenerationModule
   net:
-    _target_: models.components.seq2seq_wrapper.Seq2SeqWrapper
+    _target_: src.models.components.seq2seq_wrapper.Seq2SeqWrapper
     encoder_vocab_size:
       _target_: builtins.len
       _args_:

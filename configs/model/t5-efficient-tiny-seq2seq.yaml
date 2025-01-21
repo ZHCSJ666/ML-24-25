@@ -1,4 +1,4 @@
-_target_: src.models.CommitMessageGenerationModule
+_target_: src.models.Seq2SeqCommitMessageGenerationModule
 
 optimizer:
   _target_: src.optimizers.create_optimizer

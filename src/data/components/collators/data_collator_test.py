@@ -6,10 +6,10 @@ import torch
 from transformers import PreTrainedTokenizerFast
 
 from .data_collator_base import DataCollatorBase
-from ...types import BatchTest, SingleExample
+from ...types import SingleExample, Batch
 
 
-class DataCollatorTest(DataCollatorBase[BatchTest]):
+class DataCollatorTest(DataCollatorBase):
     """This class is used to construct batches out of lists of examples in evaluation setting.
 
     We can emulate completion workflow by adding X% of characters of each message
@@ -68,7 +68,7 @@ class DataCollatorTest(DataCollatorBase[BatchTest]):
         self.max_new_tokens = max_new_tokens
         self.decoder_start_token_id = decoder_start_token_id
 
-    def __call__(self, examples: List[SingleExample]) -> BatchTest:
+    def __call__(self, examples: List[SingleExample]) -> Batch:
         """Processes a list of examples into a BatchTest object."""
         encoder_input_ids, encoder_attention_mask = self._process_encoder_input(examples=examples)
 
@@ -80,10 +80,10 @@ class DataCollatorTest(DataCollatorBase[BatchTest]):
         ) = self._process_decoder_input(examples=examples)
 
         return BatchTest(
-            encoder_input_ids=encoder_input_ids,
-            encoder_attention_mask=encoder_attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
+            input_ids=encoder_input_ids,
+            attention_mask=encoder_attention_mask,
+            msg_input_ids=decoder_input_ids,
+            msg_attention_mask=decoder_attention_mask,
             labels=None,
             targets=targets,
             prefixes=prefixes,
@@ -154,7 +154,7 @@ class DataCollatorTest(DataCollatorBase[BatchTest]):
                 A list of target strings for each example.
                 A list of prefix strings for each example.
         """
-        message_inputs: List[List[int]] = [example.msg_input_ids for example in examples]
+        message_inputs: List[List[int]] = [example.decoder_input_ids for example in examples]
 
         all_msg_ids: List[torch.Tensor] = []
         all_msg_masks: List[torch.Tensor] = []

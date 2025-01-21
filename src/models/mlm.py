@@ -8,7 +8,7 @@ from torchmetrics import MetricCollection, SumMetric
 from transformers import PreTrainedTokenizerFast
 from transformers.modeling_outputs import Seq2SeqLMOutput
 
-from src.data.types import Batch, BatchTest, BatchTrain
+from src.data.types import Batch
 from src.metrics import MRR, Accuracy
 from src.metrics.bleu import SacreBLEUScore
 from src.metrics.rouge import ROUGEScore
@@ -16,7 +16,7 @@ from src.models.components.encoder_decoder import EncoderDecoder
 from src.utils.more_utils import TextLoggingMixin
 
 
-class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
+class MaskedLanguageModelingModule(LightningModule, TextLoggingMixin):
     """Git commit message generation module.
 
     Docs:
@@ -30,7 +30,6 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         scheduler: Optional[Callable[..., torch.optim.lr_scheduler]] = None,
         compile: bool = False,
         shift: bool = False,
-        pretrained: Optional[str] = None,
         val_text_metrics_every_step: bool = False,
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -53,10 +52,6 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         self.criterion = nn.NLLLoss(ignore_index=-100)  # Updated to ignore padding tokens
 
         self.net = net
-        if pretrained is not None:
-            checkpoint = torch.load(pretrained, map_location="cpu")
-            state_dict = {k.replace("net.", ""): v for k, v in checkpoint["state_dict"].items()}
-            self.net.load_state_dict(state_dict)
 
         text_metrics = MetricCollection(
             {
@@ -96,8 +91,8 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         self.diff_tokenizer: Optional[PreTrainedTokenizerFast] = None
 
         # Used to store temp batch data to be used for logging at the end of epochs
-        self.train_batch: Optional[BatchTrain] = None
-        self.val_batch: Optional[BatchTrain] = None
+        self.train_batch: Optional[Batch] = None
+        self.val_batch: Optional[Batch] = None
 
     def forward(self, batch: Batch) -> Any:
         """Forward pass of the model.
@@ -120,7 +115,7 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         self.val_token_metrics.reset()
         self.test_token_metrics.reset()
 
-    def common_step(self, batch: BatchTrain, split: str) -> Optional[torch.Tensor]:
+    def common_step(self, batch: Batch, split: str) -> Optional[torch.Tensor]:
         """Perform a single model step on a batch of data.
 
         :param batch: A batch of data.
@@ -141,7 +136,7 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         if not is_valid_tensor(logits) or not is_valid_tensor(loss):
             return None
 
-        batch_size = len(batch.encoder_input_ids)
+        batch_size = len(batch.input_ids)
         self.log(
             f"{split}/loss",
             loss,
@@ -164,7 +159,7 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         )
 
         # token metrics
-        num_tokens_processed = batch.encoder_attention_mask.sum().item()
+        num_tokens_processed = len(batch.input_ids)
         metric = getattr(self, f"{split}_token_metrics")
         metric(num_tokens_processed)
         self.log_dict(
@@ -187,7 +182,7 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
 
         return loss
 
-    def training_step(self, batch: BatchTrain, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: Batch, batch_idx: int) -> Optional[torch.Tensor]:
         """Training step.
 
         :param batch: A training batch.
@@ -196,14 +191,14 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         """
         return self.common_step(batch, "train")
 
-    def test_step(self, batch: BatchTest, batch_idx: int) -> None:
+    def test_step(self, batch: Batch, batch_idx: int) -> None:
         """Test step.
 
         :param batch: A test batch.
         :param batch_idx: Index of the batch.
         """
         self.evaluate_text(batch, "test")
-        num_tokens_processed = batch.encoder_attention_mask.sum().item()
+        num_tokens_processed = len(batch.input_ids)
         self.test_token_metrics(num_tokens_processed)
         self.log_dict(
             self.test_token_metrics.compute(),  # don't pass the metric object to prevent lightning from resetting it here
@@ -222,7 +217,7 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         self.train_batch = None
         self.train_token_metrics.reset()
 
-    def validation_step(self, batch: BatchTrain, batch_idx: int) -> None:
+    def validation_step(self, batch: Batch, batch_idx: int) -> None:
         """Validation step.
 
         :param batch: A validation batch.
@@ -249,16 +244,16 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         """
 
         if self.msg_tokenizer is None or self.diff_tokenizer is None:
+            # noinspection PyUnresolvedReferences
             datamodule = self.trainer.datamodule
-            self.msg_tokenizer = datamodule.msg_tokenizer
-            self.diff_tokenizer = datamodule.diff_tokenizer
-            datamodule.net = self.net.model
+            self.msg_tokenizer = datamodule.tokenizer
+            self.diff_tokenizer = datamodule.tokenizer
 
-        if not isinstance(self.net, nn.Module):
-            self.net = self.hparams.net(
-                encoder_vocab_size=self.diff_tokenizer.vocab_size,
-                decoder_vocab_size=self.msg_tokenizer.vocab_size,
-            )
+        # if not isinstance(self.net, nn.Module):
+        #     self.net = self.hparams.net(
+        #         encoder_vocab_size=self.diff_tokenizer.vocab_size,
+        #         decoder_vocab_size=self.msg_tokenizer.vocab_size,
+        #     )
 
         if self.hparams.compile and stage == "fit":
             self.net = torch.compile(self.net)
@@ -333,7 +328,7 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
             on_step=False,
             on_epoch=True,
             prog_bar=True,
-            batch_size=len(batch.encoder_input_ids),
+            batch_size=len(batch.input_ids),
         )
 
         if is_train:
@@ -352,16 +347,14 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         kwargs = kwargs or self.hparams.generation_kwargs or {}
 
         if isinstance(self.net, EncoderDecoder):
-            return self.net.generate(
-                batch,
-            )
+            return self.net.generate(batch)
         return self.net.generate(
             batch,
             **kwargs,
             prefix_allowed_tokens_fn=None,
-            pad_token_id=self.msg_tokenizer.pad_token_id,
-            bos_token_id=self.msg_tokenizer.bos_token_id,
-            eos_token_id=self.msg_tokenizer.eos_token_id,
+            pad_token_id=self.diff_tokenizer.pad_token_id,
+            bos_token_id=self.diff_tokenizer.bos_token_id,
+            eos_token_id=self.diff_tokenizer.eos_token_id,
         )
 
     def _postprocess_generated(
@@ -376,17 +369,21 @@ class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         Returns:
             A dict with decoded sources/predictions.
         """
-        decoded_inputs = self.decode_src(batch.encoder_input_ids, skip_special_tokens=True)[0]
-        decoded_preds = self.decode_tgt(predictions, skip_special_tokens=True)[0]
+        decoded_inputs = self.decode_src(batch.input_ids, skip_special_tokens=True)[0]
+        decoded_preds = self.decode_src(predictions, skip_special_tokens=True)[0]
 
-        if batch.labels is not None:
+        if batch.targets is not None:
+            targets = batch.targets
+        elif batch.labels is not None:
             targets = batch.labels.clone()
-            targets = torch.where(targets == -100, self.msg_tokenizer.pad_token_id, targets)
-            decoded_targets = self.decode_tgt(targets, skip_special_tokens=True)[0]
-        elif isinstance(batch, BatchTest) and batch.targets is not None:
-            decoded_targets = batch.targets
+            targets = torch.where(targets == -100, self.diff_tokenizer.pad_token_id, targets)
         else:
             raise ValueError(f"No target set")
+
+        if torch.is_tensor(targets):
+            decoded_targets = self.decode_src(targets, skip_special_tokens=True)[0]
+        else:
+            decoded_targets = targets
 
         results = []
 

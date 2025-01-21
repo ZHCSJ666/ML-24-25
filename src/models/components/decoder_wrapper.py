@@ -23,15 +23,15 @@ class DecoderWrapper(nn.Module):
 
     def forward(self, batch: Batch):
         output: CausalLMOutputWithPast = self.model(
-            input_ids=batch.encoder_input_ids,
-            attention_mask=batch.encoder_attention_mask,
+            input_ids=batch.input_ids,
+            attention_mask=batch.attention_mask,
             labels=batch.labels,
         )
         return {"logits": output.logits, "loss": output.loss}
 
     def generate(self, batch: Batch, **generation_kwargs):
         return self.model.generate(
-            input_ids=batch.encoder_input_ids,
-            attention_mask=batch.encoder_attention_mask,
+            input_ids=batch.input_ids,
+            attention_mask=batch.attention_mask,
             **generation_kwargs,
         )

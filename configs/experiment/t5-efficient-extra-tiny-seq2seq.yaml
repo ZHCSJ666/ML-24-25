@@ -1,13 +1,13 @@
 # @package _global_
 
 defaults:
-  - override /data: commit-chronicle
-  - override /model: t5-efficient-tiny
+  - override /data: commit-chronicle-seq2seq
+  - override /model: t5-efficient-tiny-seq2seq
   - override /callbacks: default
   - override /trainer: gpu
   - override /logger: tensorboard
 
-tags: ["commit-chronicle", "t5-efficient-tiny", "t5"]
+tags: ["commit-chronicle", "t5-efficient-extra-tiny", "t5", "seq2seq"]
 
 seed: 12345
 
@@ -30,13 +30,19 @@ model:
         - ${data.msg_tokenizer}
     model:
       config:
+        d_ff: 512
+        d_kv: 64
+        d_model: 128
+        num_layers: 4
         num_decoder_layers: 4
+#        dropout_rate: 0.25
 
 data:
+  change_types:
   batch_size: 16
   diff_max_len: ${model.net.encoder_context_max_len}
   msg_max_len: ${model.net.decoder_context_max_len}
   diff_tokenizer:
-    name_or_path: google/t5-efficient-tiny #Salesforce/codet5-small
+    name_or_path: google/t5-efficient-tiny
   msg_tokenizer:
-    name_or_path: google/t5-efficient-tiny #Salesforce/codet5-small
+    name_or_path: google/t5-efficient-tiny

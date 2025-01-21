@@ -168,7 +168,7 @@ TODO: Need to go into more detail about how the tokenizer works.
 
 ## How to run
 
-Training examples with [t5-efficient-tiny](configs/experiment/t5-efficient-tiny.yaml) experiment configuration
+Training examples with [t5-efficient-tiny-seq2seq](configs/experiment/t5-efficient-tiny-seq2seq.yaml) experiment configuration
 
 ```bash
 # train with flan-t5 model on Commit Chronicle dataset

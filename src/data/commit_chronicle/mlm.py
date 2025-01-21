@@ -8,7 +8,8 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from transformers import PreTrainedTokenizerFast
 
-from data.components.collators.mlm import (
+from data.types import Batch
+from src.data.components.collators.mlm import (
     compute_input_and_target_lengths,
     DataCollatorForT5MLM,
 )
@@ -90,13 +91,15 @@ class CommitChronicleMLMDataModule(LightningDataModule):
         self.target_length = target_length
 
         # noinspection PyTypeChecker
-        self.train_val_collator = DataCollatorForT5MLM(
-            tokenizer=tokenizer,
-            noise_density=mlm_probability,
-            mean_noise_span_length=mean_noise_span_length,
-            input_length=input_max_len,
-            target_length=target_length,
-            pad_token_id=tokenizer.pad_token_id,
+        self.train_val_collator = DataCollatorWrapper(
+            DataCollatorForT5MLM(
+                tokenizer=tokenizer,
+                noise_density=mlm_probability,
+                mean_noise_span_length=mean_noise_span_length,
+                input_length=input_max_len,
+                target_length=target_length,
+                pad_token_id=tokenizer.pad_token_id,
+            )
         )
         self.test_collator = None
 
@@ -228,6 +231,26 @@ class CommitChronicleMLMDataModule(LightningDataModule):
             shuffle=False,
             collate_fn=self.train_val_collator,
             persistent_workers=self.hparams.persistent_workers and self.hparams.num_workers > 0,
+        )
+
+
+class DataCollatorWrapper:
+    def __init__(self, collator):
+        self.collator = collator
+
+    def __call__(self, batch):
+        targets = (
+            [example.pop("target", None) for example in batch]
+            if batch[0].get("target") is not None
+            else None
+        )
+        outputs = self.collator(batch)
+        outputs["target"] = targets
+        return Batch(
+            input_ids=outputs["input_ids"],
+            attention_mask=outputs["attention_mask"],
+            labels=outputs["labels"].long(),
+            targets=targets,
         )
 
 

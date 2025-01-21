@@ -1,15 +1,13 @@
 """Shamelessly lifted from https://github.com/JetBrains-Research/commit_message_generation"""
 
-from typing import List, Dict, Any, TypeVar, Generic
+from typing import List, Dict, Any
 
 import torch
 
-from src.data.types import SingleExample
-
-T = TypeVar("T")
+from src.data.types import SingleExample, Batch
 
 
-class DataCollatorBase(Generic[T]):
+class DataCollatorBase:
     """Base class for utilities both for training and evaluation collators (e.g. processing encoder
     input).
 
@@ -59,7 +57,7 @@ class DataCollatorBase(Generic[T]):
         self.completion = completion
         self.split_ratio = split_ratio
 
-    def __call__(self, examples: List[SingleExample]) -> T:
+    def __call__(self, examples: List[SingleExample]) -> Batch:
         raise NotImplementedError()
 
     def _pad_tensor(

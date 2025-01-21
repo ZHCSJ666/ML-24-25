@@ -1,3 +1,3 @@
-from .cmg_module import CommitMessageGenerationModule
-from .mlm_module import MaskedLanguageModelingModule
-from .clm_module import CausalLanguageModelingModule
+from .seq2seq import Seq2SeqCommitMessageGenerationModule
+from .mlm import MaskedLanguageModelingModule
+from .clm import CausalLanguageModelingModule

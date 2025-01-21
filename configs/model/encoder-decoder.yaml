@@ -1,4 +1,4 @@
-_target_: src.models.cmg_module.CommitMessageGenerationModule
+_target_: src.models.Seq2SeqCommitMessageGenerationModule
 optimizer:
   _target_: torch.optim.AdamW
   _partial_: true

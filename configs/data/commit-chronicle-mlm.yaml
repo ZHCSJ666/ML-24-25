@@ -1,4 +1,4 @@
-_target_: src.data.commit_chronicle.CommitChronicleMLMDataModule
+_target_: src.data.CommitChronicleMLMDataModule
 data_dir: ${paths.data_dir}commit-chronicle
 languages: ["Go"]
 change_types: []
