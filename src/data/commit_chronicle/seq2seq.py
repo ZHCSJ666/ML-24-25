@@ -3,6 +3,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
+import torch
 from datasets import load_from_disk
 from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
@@ -225,6 +226,7 @@ class DataCollatorWrapper:
 
     def __call__(self, examples):
         batch = self.collator(examples)
+        assert torch.is_tensor(batch["labels"])
         return Batch(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],

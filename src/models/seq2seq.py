@@ -6,6 +6,7 @@ import torch.nn as nn
 from lightning import LightningModule
 from torchmetrics import MetricCollection, SumMetric
 from transformers import PreTrainedTokenizerFast
+from loguru import logger
 
 from src.data.types import Batch
 from src.metrics import MRR, Accuracy
@@ -133,6 +134,12 @@ class Seq2SeqCommitMessageGenerationModule(LightningModule, TextLoggingMixin):
             loss = self.criterion(logits.permute(0, 2, 1), batch.labels)
 
         if not is_valid_tensor(logits) or not is_valid_tensor(loss):
+            logger.warning(
+                f"Any NaNs in: inputs={torch.isnan(batch.input_ids).any()}, logits={torch.isnan(logits).any()}, loss={torch.isnan(loss).any()}"
+            )
+            logger.warning(
+                f"Any Infs in: inputs={torch.isinf(batch.input_ids).any()}, logits={torch.isinf(logits).any()}, loss={torch.isinf(loss).any()}"
+            )
             return None
 
         batch_size = len(batch.input_ids)
