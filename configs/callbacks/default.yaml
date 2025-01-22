@@ -13,6 +13,16 @@ model_checkpoint:
   save_last: True
   auto_insert_metric_name: False
 
+model_checkpoint_on_text:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  dirpath: ${paths.output_dir}/checkpoints
+  filename: "epoch_{epoch:03d}-val_sacre_bleu4_{val/sacre_bleu4:.4f}"
+  monitor: "val/sacre_bleu4"
+  mode: "max"
+  save_last: False
+  auto_insert_metric_name: False
+  verbose: False
+
 #early_stopping:
 #  monitor: "val/loss"
 #  patience: 100

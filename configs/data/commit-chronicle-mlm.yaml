@@ -1,0 +1,16 @@
+_target_: src.data.CommitChronicleMLMDataModule
+data_dir: ${paths.data_dir}commit-chronicle
+languages: ["Go"]
+change_types: []
+huggingface_path: UHHBois/commit-chronicle-dataset-simplified
+
+tokenizer:
+  _target_: src.data.components.tokenization.load_tokenizer
+  name_or_path: ???
+
+input_max_len: ???
+
+# data loader stuff
+batch_size: 16 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+num_workers: 15
+pin_memory: False

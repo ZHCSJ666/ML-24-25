@@ -1,4 +1,4 @@
-from src.data.commit_chronicle.preprocessors import CommitChroniclePreprocessor
+from src.data.commit_chronicle.preprocessor import CommitChroniclePreprocessor
 
 
 def test_preprocess_mods():

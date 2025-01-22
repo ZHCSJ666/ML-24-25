@@ -1,0 +1,60 @@
+_target_: src.models.Seq2SeqCommitMessageGenerationModule
+
+optimizer:
+  _target_: src.optimizers.create_optimizer
+  _partial_: true
+  weight_decay: 0.0
+  optimizer:
+    _target_: src.optimizers.AdamWScale
+    _partial_: true
+    lr: 2e-2
+
+scheduler:
+  _target_: src.optimizers.create_cosine_lr_scheduler
+  _partial_: true
+  warmup_steps: 0.15
+  final_cosine: 1e-5
+
+
+net:
+  _target_: src.models.components.seq2seq_wrapper.Seq2SeqWrapper
+  encoder_context_max_len: ???
+  decoder_context_max_len: ???
+  encoder_vocab_size: ???
+  decoder_vocab_size: ???
+  # This is t5-efficient-tiny model introduced by google
+  # This config was copied from https://huggingface.co/google/t5-efficient-tiny/blob/main/config.json
+  model:
+    _target_: transformers.models.t5.modeling_t5.T5ForConditionalGeneration
+    config:
+      # See https://huggingface.co/docs/transformers/en/model_doc/t5#transformers.T5Config
+      _target_: transformers.models.t5.configuration_t5.T5Config
+      _attn_implementation_autoset: true
+      _name_or_path: google/t5-efficient-tiny
+      architectures:
+        - T5ForConditionalGeneration
+      classifier_dropout: 0.0
+      d_ff: 1024
+      d_kv: 64
+      d_model: 256
+      decoder_start_token_id: 0
+#      dense_act_fn: gated-gelu # relu
+      dropout_rate: 0.1
+      eos_token_id: 1
+      feed_forward_proj: gated-gelu # relu
+      initializer_factor: 1.0
+      is_encoder_decoder: true
+#      is_gated_act: false
+      layer_norm_epsilon: 1.0e-06
+      model_type: t5
+      n_positions: 512
+      num_decoder_layers: 4
+      num_heads: 4
+      num_layers: 4
+      pad_token_id: 0
+      relative_attention_max_distance: 128
+      relative_attention_num_buckets: 32
+      torch_dtype: float32
+      transformers_version: 4.46.1
+      use_cache: true
+      vocab_size: 32128

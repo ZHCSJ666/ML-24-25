@@ -1,0 +1,4 @@
+_target_: src.utils.chat_completion.OllamaChatCompleter
+model: deepseek-coder:6.7b
+tokenizer: deepseek-ai/DeepSeek-V2-Chat
+temperature: 0.0

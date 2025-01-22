@@ -23,29 +23,12 @@ target = [
 
 ```python
 bleu(preds[1], target[1])
-
 ```
-
-
-
-
-    tensor(1.)
-
-
 
 
 ```python
 from src.metrics.rouge import ROUGEScore
 
-
-rouge = ROUGEScore(rouge_keys="rouge1")['rouge1_fmeasure']
+rouge = ROUGEScore(rouge_keys="rouge1")["rouge1_fmeasure"]
 rouge(preds[1], target[1])
-
 ```
-
-
-
-
-    tensor(1.)
-
-

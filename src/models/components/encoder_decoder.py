@@ -114,7 +114,7 @@ class EncoderDecoder(nn.Module):
             torch.Tensor: Output logits with shape (batch_size, target_sequence_length, vocab_size).
         """
         # Retrieve the source and target input IDs from the batch
-        src_input_ids = src.encoder_input_ids
+        src_input_ids = src.input_ids
         tgt_input_ids = src.decoder_input_ids
 
         # Embed the tokens and add positional encoding
@@ -128,7 +128,7 @@ class EncoderDecoder(nn.Module):
 
         # Apply the Transformer encoder and decoder
         memory = self.transformer_encoder(
-            src_embedded, src_key_padding_mask=~src.encoder_attention_mask.bool()
+            src_embedded, src_key_padding_mask=~src.attention_mask.bool()
         )
         output = self.transformer_decoder(
             tgt_embedded,
@@ -158,8 +158,8 @@ class EncoderDecoder(nn.Module):
         """
 
         self.eval()
-        batch_size = src.encoder_input_ids.size(0)
-        device = src.encoder_input_ids.device
+        batch_size = src.input_ids.size(0)
+        device = src.input_ids.device
 
         # Initialize beam search scores
         beam_scores = torch.zeros((batch_size, self.num_beams), device=device)
@@ -173,12 +173,12 @@ class EncoderDecoder(nn.Module):
         # Expand encoder output for beam search
         with torch.no_grad():
             # Forward pass through the encoder
-            src_embed = self.token_embedding(
-                src.encoder_input_ids
-            ) + self.encoder_positional_encoding[: src.encoder_input_ids.size(1), :].unsqueeze(0)
+            src_embed = self.token_embedding(src.input_ids) + self.encoder_positional_encoding[
+                : src.input_ids.size(1), :
+            ].unsqueeze(0)
             memory = self.transformer_encoder(
                 src_embed,
-                src_key_padding_mask=~src.encoder_attention_mask.bool(),
+                src_key_padding_mask=~src.attention_mask.bool(),
             )
 
             # Expand memory for beam search

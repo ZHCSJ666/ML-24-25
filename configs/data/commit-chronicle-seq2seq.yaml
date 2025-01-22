@@ -1,0 +1,20 @@
+_target_: src.data.CommitChronicleSeq2SeqDataModule
+data_dir: ${paths.data_dir}commit-chronicle
+languages: ["Go"]
+change_types: ["ADD"]
+huggingface_path: UHHBois/commit-chronicle-dataset-simplified
+
+diff_tokenizer:
+  _target_: src.data.components.tokenization.load_tokenizer
+  name_or_path: ???
+
+msg_tokenizer:
+  _target_: src.data.components.tokenization.load_tokenizer
+  name_or_path: ???
+
+diff_max_len: ???
+msg_max_len: ???
+
+batch_size: 16
+num_workers: 15
+pin_memory: False

@@ -1,0 +1,52 @@
+# pythia-14m
+# This model was introduced by EleutherAI https://huggingface.co/EleutherAI/pythia-14m
+
+_target_: src.models.CausalLanguageModelingModule
+
+optimizer:
+  _target_: src.optimizers.create_optimizer
+  _partial_: true
+  weight_decay: 0.0
+  optimizer:
+    _target_: src.optimizers.AdamWScale
+    _partial_: true
+    lr: 2e-2
+
+scheduler:
+  _target_: src.optimizers.create_cosine_lr_scheduler
+  _partial_: true
+  warmup_steps: 0.15
+  final_cosine: 1e-5
+
+# compile model for faster training with pytorch 2.0
+compile: false
+
+net:
+  _target_: src.models.components.decoder_wrapper.DecoderWrapper
+  tokenizer: ???
+  # This config was copied or modified from https://huggingface.co/EleutherAI/pythia-14m/blob/main/config.json
+  # See https://huggingface.co/docs/transformers/en/model_doc/gpt_neox#transformers.GPTNeoXConfig
+  config:
+    _target_: transformers.models.gpt_neox.configuration_gpt_neox.GPTNeoXConfig
+    architectures:
+      - GPTNeoXForCausalLM
+    bos_token_id: 0
+    classifier_dropout: 0.1
+    eos_token_id: 0
+    hidden_act: gelu
+    hidden_size: 128
+    initializer_range: 0.02
+    intermediate_size: 512
+    layer_norm_eps: 1.0e-05
+    max_position_embeddings: 2048
+    model_type: gpt_neox
+    num_attention_heads: 4
+    num_hidden_layers: 6
+    rotary_emb_base: 10000
+    rotary_pct: 0.25
+    tie_word_embeddings: false
+    torch_dtype: float16
+    transformers_version: 4.29.2
+    use_cache: true
+    use_parallel_residual: true
+    vocab_size: 50304 # will be updated in code

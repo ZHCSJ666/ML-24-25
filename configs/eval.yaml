@@ -2,13 +2,15 @@
 
 defaults:
   - _self_
-  - data: commit_chronicle # choose datamodule with `test_dataloader()` for evaluation
-  - model: mnist
+  - data: commit-chronicle
+  - model: t5-efficient-tiny
+  - callbacks: null
   - logger: null
   - trainer: default
   - paths: default
   - extras: default
   - hydra: default
+  - experiment: null
 
 task_name: "eval"
 

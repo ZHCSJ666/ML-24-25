@@ -1,8 +1,4 @@
 # @package _global_
-
-# to execute this experiment run:
-# python train.py experiment=flan-t5-small
-
 defaults:
   - override /data: commit_chronicle
   - override /model: encoder-decoder
@@ -10,10 +6,7 @@ defaults:
   - override /trainer: gpu
   - override /logger: tensorboard
 
-# all parameters below will be merged with parameters from default configurations set above
-# this allows you to overwrite only specified parameters
-
-tags: ["commit_chronicle", "encoder_decoder"]
+tags: ["commit-chronicle", "encoder-decoder", "seq2seq"]
 
 seed: 12345
 

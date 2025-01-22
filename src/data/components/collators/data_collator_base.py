@@ -1,15 +1,13 @@
 """Shamelessly lifted from https://github.com/JetBrains-Research/commit_message_generation"""
 
-from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any
+from typing import List, Dict, Any
 
 import torch
 
-from src.data.types import SingleExample
+from src.data.types import SingleExample, Batch
 
 
-@dataclass
-class BaseCollatorUtils:
+class DataCollatorBase:
     """Base class for utilities both for training and evaluation collators (e.g. processing encoder
     input).
 
@@ -18,8 +16,6 @@ class BaseCollatorUtils:
         diff_*_token_id: Corresponding special token for diff tokenizer.
         encoder_context_max_len: Maximum allowed number of tokens in encoder context.
         decoder_context_max_len: Maximum allowed number of tokens in decoder context.
-        encoder_input_type: Should be `diff`, corresponding data will be used
-          to construct encoder input.
     """
 
     completion: bool
@@ -34,7 +30,35 @@ class BaseCollatorUtils:
     diff_pad_token_id: int
     encoder_context_max_len: int
     decoder_context_max_len: int
-    encoder_input_type: str
+
+    def __init__(
+        self,
+        diff_bos_token_id: int,
+        diff_eos_token_id: int,
+        diff_pad_token_id: int,
+        msg_bos_token_id: int,
+        msg_eos_token_id: int,
+        msg_pad_token_id: int,
+        msg_sep_token_id: int,
+        encoder_context_max_len: int,
+        decoder_context_max_len: int,
+        completion: bool,
+        split_ratio: float,
+    ) -> None:
+        self.diff_bos_token_id = diff_bos_token_id
+        self.diff_eos_token_id = diff_eos_token_id
+        self.diff_pad_token_id = diff_pad_token_id
+        self.msg_bos_token_id = msg_bos_token_id
+        self.msg_eos_token_id = msg_eos_token_id
+        self.msg_pad_token_id = msg_pad_token_id
+        self.msg_sep_token_id = msg_sep_token_id
+        self.encoder_context_max_len = encoder_context_max_len
+        self.decoder_context_max_len = decoder_context_max_len
+        self.completion = completion
+        self.split_ratio = split_ratio
+
+    def __call__(self, examples: List[SingleExample]) -> Batch:
+        raise NotImplementedError()
 
     def _pad_tensor(
         self, input_tensor: torch.Tensor, pad_len: int, value: int, left: bool
@@ -71,9 +95,7 @@ class BaseCollatorUtils:
             pad_token_id = self.diff_pad_token_id
 
         inputs = [
-            [bos_token_id]
-            + example[: self.encoder_context_max_len - 2]
-            + [eos_token_id]
+            [bos_token_id] + example[: self.encoder_context_max_len - 2] + [eos_token_id]
             for example in inputs
         ]
         inputs_tensors = [torch.tensor(ids, dtype=torch.int64) for ids in inputs]
@@ -101,12 +123,8 @@ class BaseCollatorUtils:
         ]
         return torch.stack(inputs_tensors), torch.stack(masks_tensors)
 
-    def _process_encoder_input(self, examples: List[Dict[str, Any]]):
+    def _process_encoder_input(self, examples: List[SingleExample]):
         """Process encoder input (diffs and optionally partial messages)."""
-        if self.encoder_input_type != "diff":
-            raise ValueError(
-                f"Encoder input type {self.encoder_input_type} is not supported"
-            )
 
         input_ids = [example.diff_input_ids for example in examples]
 
