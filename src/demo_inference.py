@@ -4,12 +4,12 @@ import hydra
 import pandas as pd
 import rootutils
 import torch
-from lightning import LightningModule, LightningDataModule
+from lightning import LightningDataModule, LightningModule
 from omegaconf import OmegaConf
 
-from src.data.types import Batch
-
 ROOT = rootutils.setup_root(".", ".project-root", pythonpath=True)
+
+from src.data.types import Batch
 
 
 def load_run(checkpoint_path: Path):
@@ -38,8 +38,16 @@ def load_run(checkpoint_path: Path):
     model: LightningModule = hydra.utils.instantiate(cfg.model, _convert_="object")
 
     # loading checkpoint
-    checkpoint = torch.load(checkpoint_path)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if device.type == "cuda":
+
+        checkpoint = torch.load(checkpoint_path, pickle_module=torch.safe_pickle)  # nosec B614
+    else:
+
+        checkpoint = torch.load(
+            checkpoint_path, map_location=torch.device("cpu"), pickle_module=torch.safe_pickle
+        )  # nosec B614
+
     model.load_state_dict(checkpoint["state_dict"])
     model = model.to(device).eval()
 
@@ -72,8 +80,33 @@ def load_run(checkpoint_path: Path):
             df = pd.DataFrame(string_results)
             print(df[["prediction", "target"]].head(n=16).to_string(max_colwidth=5000))
 
+    return model, datamodule
+
+
+def generate_commit_message(model, diff_input: str, device: str = None):
+    """Generate a commit message for a given diff input."""
+    if device is None:
+        device = next(model.parameters()).device
+
+    # Prepare input
+    tokenized_input = model.diff_tokenizer(
+        diff_input, return_tensors="pt", truncation=True, max_length=512
+    )
+    input_ids = tokenized_input["input_ids"].to(device)
+    attention_mask = tokenized_input["attention_mask"].to(device)
+
+    # Create a Batch object
+    batch = Batch(input_ids=input_ids, attention_mask=attention_mask)
+
+    # Generate prediction
+    with torch.no_grad():
+        outputs = model.generate(batch)
+        decoded_output = model.msg_tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    return decoded_output
+
 
 if __name__ == "__main__":
-    load_run(
+    model, datamodule = load_run(
         ROOT / "logs/train/runs/2025-01-20_02-45-28/checkpoints/epoch_036-val_MRR_top5_0.6450.ckpt"
     )
