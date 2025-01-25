@@ -20,8 +20,9 @@ net:
   _target_: src.models.components.seq2seq_wrapper.Seq2SeqWrapper
   encoder_context_max_len: ???
   decoder_context_max_len: ???
-  encoder_vocab_size: ???
-  decoder_vocab_size: ???
+  tokenizer: ???
+#  encoder_vocab_size: ???
+#  decoder_vocab_size: ???
   # This is t5-efficient-tiny model introduced by google
   # This config was copied from https://huggingface.co/google/t5-efficient-tiny/blob/main/config.json
   model:

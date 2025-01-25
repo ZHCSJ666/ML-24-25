@@ -63,7 +63,7 @@ class AdamWScale(Optimizer):
         weight_decay (`float`, *optional*, defaults to 0):
             Decoupled weight decay to apply.
         correct_bias (`bool`, *optional*, defaults to `True`):
-            Whether or not to correct bias in Adam (for instance, in Bert TF repository they use `False`).
+            Whether to correct bias in Adam (for instance, in Bert TF repository they use `False`).
         no_deprecation_warning (`bool`, *optional*, defaults to `False`):
             A flag used to disable the deprecation warning (set to `True` to disable the warning).
     """

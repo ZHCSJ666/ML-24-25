@@ -2,8 +2,8 @@
 
 defaults:
   - _self_
-  - data: commit-chronicle
-  - model: t5-efficient-tiny
+  - data: commit-chronicle-seq2seq
+  - model: t5-efficient-extra-tiny-seq2seq
   - callbacks: null
   - logger: null
   - trainer: default

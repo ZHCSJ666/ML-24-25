@@ -1,0 +1,18 @@
+_target_: src.models.Seq2SeqCommitMessageGenerationModule
+net:
+  _target_: src.models.components.seq2seq_wrapper.Seq2SeqWrapper
+  tokenizer: ???
+  model:
+    _target_: transformers.AutoModelForSeq2SeqLM.from_pretrained
+    pretrained_model_name_or_path: JetBrains-Research/cmg-codet5-without-history
+
+# We don't use this BTW (as we are not gonna train the baseline model)
+optimizer:
+  _target_: src.optimizers.create_optimizer
+  _partial_: true
+  weight_decay: 0.0
+  optimizer:
+    _target_: src.optimizers.AdamWScale
+    _partial_: true
+    lr: 2e-2
+
