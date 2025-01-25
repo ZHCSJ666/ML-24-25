@@ -5,17 +5,17 @@ from typing import Any, Optional, Sequence
 import numpy as np
 from datasets import load_from_disk
 from lightning import LightningDataModule
+from loguru import logger
 from torch.utils.data import DataLoader, Dataset
 from transformers import PreTrainedTokenizerFast
 
-from data.types import Batch
-from src.data.components.collators.mlm import (
-    compute_input_and_target_lengths,
-    DataCollatorForT5MLM,
-)
 from src.data.commit_chronicle.preprocessor import CommitChroniclePreprocessor
+from src.data.components.collators.mlm import (
+    DataCollatorForT5MLM,
+    compute_input_and_target_lengths,
+)
+from src.data.types import Batch
 from src.utils.more_utils import hash_dict
-from loguru import logger
 
 
 class CommitChronicleMLMDataModule(LightningDataModule):

@@ -1,9 +1,11 @@
+import os
 from pathlib import Path
 
 import hydra
 import pandas as pd
 import rootutils
 import torch
+from huggingface_hub import HfApi, create_repo, login
 from lightning import LightningDataModule, LightningModule
 from omegaconf import OmegaConf
 
@@ -41,12 +43,10 @@ def load_run(checkpoint_path: Path):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if device.type == "cuda":
 
-        checkpoint = torch.load(checkpoint_path, pickle_module=torch.safe_pickle)  # nosec B614
+        checkpoint = torch.load(checkpoint_path)  # nosec B614
     else:
 
-        checkpoint = torch.load(
-            checkpoint_path, map_location=torch.device("cpu"), pickle_module=torch.safe_pickle
-        )  # nosec B614
+        checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))  # nosec B614
 
     model.load_state_dict(checkpoint["state_dict"])
     model = model.to(device).eval()
@@ -88,10 +88,18 @@ def generate_commit_message(model, diff_input: str, device: str = None):
     if device is None:
         device = next(model.parameters()).device
 
-    # Prepare input
-    tokenized_input = model.diff_tokenizer(
-        diff_input, return_tensors="pt", truncation=True, max_length=512
-    )
+    # Prepare input based on available tokenizer
+    if hasattr(model, "diff_tokenizer"):
+        tokenized_input = model.diff_tokenizer(
+            diff_input, return_tensors="pt", truncation=True, max_length=512
+        )
+    elif hasattr(model, "tokenizer"):
+        tokenized_input = model.tokenizer(
+            diff_input, return_tensors="pt", truncation=True, max_length=512
+        )
+    else:
+        raise ValueError("No tokenizer found on model")
+
     input_ids = tokenized_input["input_ids"].to(device)
     attention_mask = tokenized_input["attention_mask"].to(device)
 
@@ -101,12 +109,17 @@ def generate_commit_message(model, diff_input: str, device: str = None):
     # Generate prediction
     with torch.no_grad():
         outputs = model.generate(batch)
-        decoded_output = model.msg_tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Use appropriate tokenizer for decoding
+        if hasattr(model, "msg_tokenizer"):
+            decoded_output = model.msg_tokenizer.decode(outputs[0], skip_special_tokens=True)
+        else:
+            decoded_output = model.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
     return decoded_output
 
 
 if __name__ == "__main__":
     model, datamodule = load_run(
-        ROOT / "logs/train/runs/2025-01-20_02-45-28/checkpoints/epoch_036-val_MRR_top5_0.6450.ckpt"
+        ROOT
+        / "logs_2/train/runs/2025-01-24_23-12-54/checkpoints/epoch_023-val_MRR_top5_0.6524.ckpt"
     )
