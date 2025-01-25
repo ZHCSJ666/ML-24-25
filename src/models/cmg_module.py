@@ -4,8 +4,6 @@ from typing import Any, Callable, Dict, List, Optional
 import torch
 import torch.nn as nn
 from lightning import LightningModule
-from lightning.pytorch.loggers.tensorboard import TensorBoardLogger
-from lightning.pytorch.loggers.wandb import WandbLogger
 from torchmetrics import MetricCollection
 from transformers import PreTrainedTokenizerFast
 from transformers.modeling_outputs import Seq2SeqLMOutput
@@ -15,9 +13,10 @@ from src.metrics import MRR, Accuracy
 from src.metrics.bleu import SacreBLEUScore
 from src.metrics.rouge import ROUGEScore
 from src.models.components.encoder_decoder import EncoderDecoder
+from src.utils.more_utils import TextLoggingMixin
 
 
-class CommitMessageGenerationModule(LightningModule):
+class CommitMessageGenerationModule(LightningModule, TextLoggingMixin):
     """Git commit message generation module.
 
     Docs:
@@ -28,9 +27,10 @@ class CommitMessageGenerationModule(LightningModule):
         self,
         net: nn.Module | Callable[..., nn.Module],
         optimizer: Callable[..., torch.optim.Optimizer],
-        scheduler: Optional[Callable[..., torch.optim.lr_scheduler]] = None,
+        scheduler= None,
         compile: bool = False,
         shift: bool = False,
+        pretrained: Optional[str] = None,
         val_text_metrics_every_step: bool = False,
         generation_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -50,11 +50,13 @@ class CommitMessageGenerationModule(LightningModule):
         self.save_hyperparameters(
             logger=False, ignore=["net"] if isinstance(net, nn.Module) else []
         )
-        self.criterion = nn.NLLLoss(
-            ignore_index=-100
-        )  # Updated to ignore padding tokens
+        self.criterion = nn.NLLLoss(ignore_index=-100)  # Updated to ignore padding tokens
 
         self.net = net
+        if pretrained is not None:
+            checkpoint = torch.load(pretrained, map_location="cpu")
+            state_dict = {k.replace("net.", ""): v for k, v in checkpoint["state_dict"].items()}
+            self.net.load_state_dict(state_dict)
 
         text_metrics = MetricCollection(
             {
@@ -106,14 +108,13 @@ class CommitMessageGenerationModule(LightningModule):
         self.val_metrics.reset()
         self.val_batch = None
 
-    def common_step(self, batch: BatchTrain, split: str) -> Dict[str, Any]:
+    def common_step(self, batch: BatchTrain, split: str) -> Optional[torch.Tensor]:
         """Perform a single model step on a batch of data.
 
         :param batch: A batch of data.
         :param split: One of "train" or "val".
         :return: A dictionary containing loss and, if applicable, BLEU scores.
         """
-        result = {}
 
         outputs = self.forward(batch)  # Shape: (batch, seq_len, vocab_size)
         if isinstance(outputs, Seq2SeqLMOutput):
@@ -124,9 +125,10 @@ class CommitMessageGenerationModule(LightningModule):
             loss = self.criterion(
                 logits.permute(0, 2, 1), batch.labels
             )  # Shape of both: (batch, seq_len, vocab_size), as Pytorch expects
-        result["loss"] = (
-            None if torch.isnan(loss).any() or torch.isnan(logits).any() else loss
-        )
+
+        if not is_valid_tensor(logits) or not is_valid_tensor(loss):
+            return None
+
         batch_size = len(batch.encoder_input_ids)
         self.log(
             f"{split}/loss",
@@ -150,7 +152,7 @@ class CommitMessageGenerationModule(LightningModule):
         )
 
         if self.hparams.val_text_metrics_every_step and split in ["val"]:
-            self.generate_text_and_compute_metrics(batch, split, log_text=False)
+            self.evaluate_text(batch, split, log_text=False)
 
         # Here, we basically randomly save a batch
         # When epoch ends, we'll run this batch data through our model to generate text (in inference mode).
@@ -159,17 +161,16 @@ class CommitMessageGenerationModule(LightningModule):
         if saved_batch is None or random.random() > 0.5:  # nosec B311
             setattr(self, f"{split}_batch", batch)
 
-        return result
+        return loss
 
-    def training_step(self, batch: BatchTrain, batch_idx: int) -> Dict[str, Any]:
+    def training_step(self, batch: BatchTrain, batch_idx: int) -> torch.Tensor:
         """Training step.
 
         :param batch: A training batch.
         :param batch_idx: Index of the batch.
         :return: Dictionary containing the loss.
         """
-        result = self.common_step(batch, "train")
-        return result.get("loss")
+        return self.common_step(batch, "train")
 
     def test_step(self, batch: BatchTest, batch_idx: int) -> None:
         """Test step.
@@ -177,11 +178,11 @@ class CommitMessageGenerationModule(LightningModule):
         :param batch: A test batch.
         :param batch_idx: Index of the batch.
         """
-        self.generate_text_and_compute_metrics(batch, "test")
+        self.evaluate_text(batch, "test")
 
     def on_train_epoch_end(self) -> None:
         """Lightning hook that is called when a training epoch ends."""
-        self.generate_text_and_compute_metrics(self.train_batch, "train")
+        self.evaluate_text(self.train_batch, "train")
         self.train_batch = None
 
     def validation_step(self, batch: BatchTrain, batch_idx: int) -> None:
@@ -196,7 +197,7 @@ class CommitMessageGenerationModule(LightningModule):
         """Lightning hook that is called when a validation epoch ends."""
         # if we are not using text metrics on every step, then we can do it here
         if not self.hparams.val_text_metrics_every_step:
-            self.generate_text_and_compute_metrics(self.val_batch, "val")
+            self.evaluate_text(self.val_batch, "val")
         self.val_batch = None
 
     def setup(self, stage: str) -> None:
@@ -213,6 +214,7 @@ class CommitMessageGenerationModule(LightningModule):
             datamodule = self.trainer.datamodule
             self.msg_tokenizer = datamodule.msg_tokenizer
             self.diff_tokenizer = datamodule.diff_tokenizer
+            datamodule.net = self.net.model
 
         if not isinstance(self.net, nn.Module):
             self.net = self.hparams.net(
@@ -247,16 +249,14 @@ class CommitMessageGenerationModule(LightningModule):
                 "lr_scheduler": {
                     "scheduler": scheduler,
                     "monitor": "val/loss",
-                    "interval": "epoch",
+                    "interval": "step",
                     "frequency": 1,
                 },
             }
         return {"optimizer": optimizer}
 
     @torch.no_grad()
-    def generate_text_and_compute_metrics(
-        self, batch: Batch, split, log_text: bool = True
-    ) -> None:
+    def evaluate_text(self, batch: Batch, split, log_text: bool = True) -> None:
         """Common operations to perform at the end of each epoch.
 
         Args:
@@ -286,10 +286,10 @@ class CommitMessageGenerationModule(LightningModule):
             self.log_text(text_metric.prefix, string_results)
 
         # compute metrics
-        inputs, preds = zip(
-            *[(result["input"], result["prediction"]) for result in string_results]
+        predictions, targets = zip(
+            *[(result["prediction"], [result["target"]]) for result in string_results]
         )
-        text_metric(preds, inputs)
+        text_metric(predictions, targets)
         self.log_dict(
             text_metric,
             on_step=False,
@@ -338,26 +338,18 @@ class CommitMessageGenerationModule(LightningModule):
         Returns:
             A dict with decoded sources/predictions.
         """
-        decoded_inputs = self.decode_src(
-            batch.encoder_input_ids, skip_special_tokens=True
-        )[0]
+        decoded_inputs = self.decode_src(batch.encoder_input_ids, skip_special_tokens=True)[0]
         decoded_preds = self.decode_tgt(predictions, skip_special_tokens=True)[0]
 
-        # TODO: decode ground truth
-        # if batch.labels is not None:
-        #     targets = batch.labels
-        # elif isinstance(batch, BatchTest) and batch.targets is not None:
-        #     targets = batch.targets
-        # else:
-        #     targets = None
-        #
-        # if targets is not None:
-        #     targets = targets.clone()
-        #     targets[targets == -100] = self.msg_tokenizer.pad_token_id
-        #     decoded_targets = self.decode_tgt(targets, skip_special_tokens=True)[0]
-        # else:
-        #     decoded_targets = [None for _ in range(len(batch.encoder_input_ids))]
-        decoded_targets = [None for _ in range(len(batch.encoder_input_ids))]
+        if batch.labels is not None:
+            targets = batch.labels.clone()
+            targets = torch.where(targets == -100, self.msg_tokenizer.pad_token_id, targets)
+            decoded_targets = self.decode_tgt(targets, skip_special_tokens=True)[0]
+        elif isinstance(batch, BatchTest) and batch.targets is not None:
+            decoded_targets = batch.targets
+        else:
+            raise ValueError(f"No target set")
+
         results = []
 
         for (
@@ -368,9 +360,8 @@ class CommitMessageGenerationModule(LightningModule):
             item = {
                 "input": input_,
                 "prediction": pred,
+                "target": target,
             }
-            if target is not None:
-                item["target"] = target
             results.append(item)
         return results
 
@@ -396,50 +387,6 @@ class CommitMessageGenerationModule(LightningModule):
         """
         return tuple(self.msg_tokenizer.batch_decode(arg, **kwargs) for arg in args)
 
-    def log_text(
-        self, prefix, results: List[Dict[str, str]], num_results: int = 4
-    ) -> None:
-        """Log generated git commit message results.
 
-        This method only supports TensorBoard and Wandb at the moment.
-        """
-        random.shuffle(results)
-        self.log_text_tensorboard(prefix, results, num_results)
-        self.log_text_wandb(prefix, results, num_results)
-
-    def log_text_tensorboard(
-        self, prefix, results: List[Dict[str, str]], num_results
-    ) -> None:
-        tb_logger: Optional[TensorBoardLogger] = None
-        for logger in self.loggers:
-            if isinstance(logger, TensorBoardLogger):
-                tb_logger = logger
-                break
-        if tb_logger is None:
-            return
-
-        writer = tb_logger.experiment
-        for result in results[:num_results]:
-            for key, value in result.items():
-                writer.add_text(prefix + key, value, self.global_step)
-
-    def log_text_wandb(
-        self, prefix, results: List[Dict[str, str]], num_results
-    ) -> None:
-        wandb_logger: Optional[WandbLogger] = None
-        for logger in self.loggers:
-            if isinstance(logger, WandbLogger):
-                wandb_logger = logger
-                break
-        if wandb_logger is None:
-            return
-
-        columns = list(results[0].keys())
-        data = [list(result.values()) for result in results[:num_results]]
-        wandb_logger.log_text(
-            prefix + "text", columns=columns, data=data, step=self.global_step
-        )
-
-
-if __name__ == "__main__":
-    _ = CommitMessageGenerationModule(None, None, None, None)
+def is_valid_tensor(tensor):
+    return not torch.any(torch.isnan(tensor) | torch.isinf(tensor))

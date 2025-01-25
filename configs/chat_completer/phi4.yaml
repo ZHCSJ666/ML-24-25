@@ -1,0 +1,4 @@
+_target_: src.utils.chat_completion.OllamaChatCompleter
+model: phi4
+tokenizer: microsoft/phi-4
+temperature: 0.0

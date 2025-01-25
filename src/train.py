@@ -4,11 +4,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import hydra
 import lightning as L
 import rootutils
-from lightning import Callback, LightningModule, Trainer
+from lightning import Callback, LightningModule, Trainer, LightningDataModule
 from lightning.pytorch.loggers import Logger
 from omegaconf import DictConfig
 
-from data.commit_chronicle.module import CommitChronicleDataModule
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
@@ -57,7 +56,8 @@ def train(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         L.seed_everything(cfg.seed, workers=True)
 
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
-    datamodule: CommitChronicleDataModule = hydra.utils.instantiate(cfg.data)
+    datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data, _convert_="object")
+
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model, _convert_="object")
 

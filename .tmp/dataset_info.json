@@ -1,0 +1,66 @@
+{
+  "builder_name": "parquet",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "commit-chronicle-dataset-simplified",
+  "dataset_size": 394994776,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/UHHBois/commit-chronicle-dataset-simplified@b1cd27f069206100d0e0500bc89baf81898dd006/data/train-00000-of-00001.parquet": {
+      "num_bytes": 102012743,
+      "checksum": null
+    },
+    "hf://datasets/UHHBois/commit-chronicle-dataset-simplified@b1cd27f069206100d0e0500bc89baf81898dd006/data/validation-00000-of-00001.parquet": {
+      "num_bytes": 20261960,
+      "checksum": null
+    },
+    "hf://datasets/UHHBois/commit-chronicle-dataset-simplified@b1cd27f069206100d0e0500bc89baf81898dd006/data/test-00000-of-00001.parquet": {
+      "num_bytes": 22605243,
+      "checksum": null
+    }
+  },
+  "download_size": 144879946,
+  "features": {
+    "diff": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "msg": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "repo": {
+      "dtype": "string",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 539874722,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 279722434,
+      "num_examples": 76955,
+      "dataset_name": "commit-chronicle-dataset-simplified"
+    },
+    "validation": {
+      "name": "validation",
+      "num_bytes": 55987836,
+      "num_examples": 15851,
+      "dataset_name": "commit-chronicle-dataset-simplified"
+    },
+    "test": {
+      "name": "test",
+      "num_bytes": 59284506,
+      "num_examples": 16462,
+      "dataset_name": "commit-chronicle-dataset-simplified"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

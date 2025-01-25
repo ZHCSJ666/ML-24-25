@@ -2,7 +2,7 @@ import pytest
 import torch
 from transformers import AutoTokenizer
 
-from src.data.components.collators.base_collator_utils import BaseCollatorUtils
+from src.data.components.collators.data_collator_base import DataCollatorBase
 from src.data.types import SingleExample
 
 
@@ -20,7 +20,7 @@ def default_tokenizers():
 def collator_diff(default_tokenizers):
     """Returns an initialized collator utility instance."""
     encoder_tok, decoder_tok = default_tokenizers
-    collator = BaseCollatorUtils(
+    collator = DataCollatorBase(
         diff_bos_token_id=encoder_tok.bos_token_id,
         diff_eos_token_id=encoder_tok.eos_token_id,
         diff_pad_token_id=encoder_tok.pad_token_id,

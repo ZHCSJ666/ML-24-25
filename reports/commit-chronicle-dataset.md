@@ -34,7 +34,7 @@ filtered = OUTPUT_DIR / "01-filtered-validation"
 # we don't directly reference `LANGUAGES` in the function because in python multiprocessing,
 # all functions passed as parameters shouldn't reference variables outside of them
 def filter_dataset(example, languages):
-    return example["language"] in languages
+    return example["language"] in languages 
 
 
 if not filtered.exists():
@@ -221,6 +221,34 @@ dataset.select(range(10)).to_pandas()
 
 
 
+
+```python
+dataset.select(range(1))[0]["mods"][0].keys()
+
+```
+
+
+
+
+    dict_keys(['change_type', 'old_path', 'new_path', 'diff'])
+
+
+
+
+```python
+dataset.select(range(1))
+```
+
+
+
+
+    Dataset({
+        features: ['author', 'date', 'timezone', 'hash', 'message', 'mods', 'language', 'license', 'repo', 'original_message'],
+        num_rows: 1
+    })
+
+
+
 ## EDA
 
 ### Column names
@@ -254,7 +282,7 @@ subset[0][
     {'author': 770513, 'date': '11.01.2019 15:33:29', 'timezone': -3600, 'hash': 'd78216c85896929f46741c23f28f3b870998862b', 'message': 'Fixed a bug where all messages of a channel were loaded, instead of the latest ones', 'mods': [{'change_type': 'MODIFY', 'old_path': 'internal/ui/window.go', 'new_path': 'internal/ui/window.go', 'diff': '@@ -58,7 +58,7 @@ func NewWindow(discord *discordgo.Session) (*Window, error) {\n}\nif window.selectedChannel != nil {\n- discordError := window.LoadChannel(window.selectedChannel.ID)\n+ discordError := window.LoadChannel(window.selectedChannel)\nif discordError != nil {\nlog.Fatalf("Error loading messages for channel (%s).", discordError.Error())\n}\n@@ -142,8 +142,9 @@ func NewWindow(discord *discordgo.Session) (*Window, error) {\ncontinue\n}\n- messages = append(window.shownMessages, messages...)\n- window.SetMessages(messages)\n+ fmt.Println("Adding stuff")\n+\n+ window.AddMessages(messages)\n}\ncase <-quitMessageListener:\nmessageTick.Stop()\n@@ -232,8 +233,9 @@ func (window *Window) ClearMessages() {\nwindow.messageContainer.Clear()\n}\n-func (window *Window) LoadChannel(channelID string) error {\n- messages, discordError := window.session.ChannelMessages(channelID, 50, "", "", "")\n+func (window *Window) LoadChannel(channel *discordgo.Channel) error {\n+\n+ messages, discordError := window.session.ChannelMessages(channel.ID, 100, channel.LastMessageID, "", "")\nif discordError != nil {\nreturn discordError\n}\n@@ -254,16 +256,14 @@ func (window *Window) LoadChannel(channelID string) error {\nreturn timeOne.Before(timeTwo)\n})\n- window.SetMessages(messages)\n+ window.AddMessages(messages)\nreturn nil\n}\n-func (window *Window) SetMessages(messages []*discordgo.Message) {\n- window.shownMessages = messages\n+func (window *Window) AddMessages(messages []*discordgo.Message) {\n+ window.shownMessages = append(window.shownMessages, messages...)\nwindow.app.QueueUpdateDraw(func() {\n- window.ClearMessages()\n-\nfor index, message := range messages {\ntime, parseError := message.Timestamp.Parse()\nif parseError == nil {\n'}], 'language': 'Go', 'license': 'BSD 3-Clause New or Revised License', 'repo': 'bios-marcel/cordless', 'original_message': 'Fixed a bug where all messages of a channel were loaded, instead of the latest ones'}
     {'author': 770513, 'date': '11.01.2019 15:56:57', 'timezone': -3600, 'hash': 'a66149802815d7caa1fb56eaf53ea838d3fc4331', 'message': 'Messages are now all loaded, if there were deleted messages, some might get laoded twice though', 'mods': [{'change_type': 'MODIFY', 'old_path': 'internal/ui/window.go', 'new_path': 'internal/ui/window.go', 'diff': '@@ -19,6 +19,7 @@ type Window struct {\nsession *discordgo.Session\n+ lastMessageID *string\nshownMessages []*discordgo.Message\nselectedServer *discordgo.UserGuild\nselectedChannel *discordgo.Channel\n@@ -124,13 +125,10 @@ func NewWindow(discord *discordgo.Session) (*Window, error) {\nselect {\ncase <-messageTick.C:\nif window.selectedChannel != nil {\n- messageAmount := len(window.shownMessages)\nvar messages []*discordgo.Message\nvar discordError error\n- if window.shownMessages != nil && messageAmount > 0 {\n- messages, discordError = discord.ChannelMessages(window.selectedChannel.ID, 100, "", window.shownMessages[messageAmount-1].ID, "")\n- } else {\n- messages, discordError = discord.ChannelMessages(window.selectedChannel.ID, 100, "", "", "")\n+ if window.lastMessageID != nil {\n+ messages, discordError = discord.ChannelMessages(window.selectedChannel.ID, 100, "", *window.lastMessageID, "")\n}\n//TODO Handle properly\n@@ -142,6 +140,8 @@ func NewWindow(discord *discordgo.Session) (*Window, error) {\ncontinue\n}\n+ window.lastMessageID = &messages[len(messages)-1].ID\n+\nwindow.AddMessages(messages)\n}\ncase <-quitMessageListener:\n@@ -238,6 +238,15 @@ func (window *Window) LoadChannel(channel *discordgo.Channel) error {\nreturn discordError\n}\n+ messageLast, discordError := window.session.ChannelMessages(channel.ID, 100, "", messages[len(messages)-1].ID, "")\n+ if discordError != nil {\n+ return discordError\n+ }\n+\n+ messages = append(messages, messageLast[0])\n+\n+ window.lastMessageID = &channel.LastMessageID\n+\nsort.Slice(messages, func(x, y int) bool {\ntimeOne, parseError := messages[x].Timestamp.Parse()\nif parseError != nil {\n@@ -262,16 +271,18 @@ func (window *Window) AddMessages(messages []*discordgo.Message) {\nwindow.shownMessages = append(window.shownMessages, messages...)\nwindow.app.QueueUpdateDraw(func() {\n- for index, message := range messages {\n+ for _, message := range messages {\n+ rowIndex := window.messageContainer.GetRowCount()\n+\ntime, parseError := message.Timestamp.Parse()\nif parseError == nil {\ntimeCellText := fmt.Sprintf("%02d:%02d:%02d", time.Hour(), time.Minute(), time.Second())\n- window.messageContainer.SetCell(index, 0, tview.NewTableCell(timeCellText))\n+ window.messageContainer.SetCell(rowIndex, 0, tview.NewTableCell(timeCellText))\n}\n//TODO use nickname instead.\n- window.messageContainer.SetCell(index, 1, tview.NewTableCell(message.Author.Username))\n- window.messageContainer.SetCell(index, 2, tview.NewTableCell(message.Content))\n+ window.messageContainer.SetCell(rowIndex, 1, tview.NewTableCell(message.Author.Username))\n+ window.messageContainer.SetCell(rowIndex, 2, tview.NewTableCell(message.Content))\n}\nwindow.messageContainer.Select(window.messageContainer.GetRowCount()-1, 0)\n'}], 'language': 'Go', 'license': 'BSD 3-Clause New or Revised License', 'repo': 'bios-marcel/cordless', 'original_message': 'Messages are now all loaded, if there were deleted messages, some might get laoded twice though'}
     {'author': 770513, 'date': '12.01.2019 01:56:41', 'timezone': -3600, 'hash': 'a4c519d5b413b846021f48517e86860beeaad7e5', 'message': 'Fix channel loading, now all messages are loaded and none are loaded twice', 'mods': [{'change_type': 'MODIFY', 'old_path': 'internal/ui/window.go', 'new_path': 'internal/ui/window.go', 'diff': '@@ -3,7 +3,6 @@ package ui\nimport (\n"fmt"\n"log"\n- "sort"\n"time"\n"github.com/bwmarrin/discordgo"\n@@ -233,36 +232,24 @@ func (window *Window) ClearMessages() {\nfunc (window *Window) LoadChannel(channel *discordgo.Channel) error {\n- messages, discordError := window.session.ChannelMessages(channel.ID, 100, channel.LastMessageID, "", "")\n+ messages, discordError := window.session.ChannelMessages(channel.ID, 100, "", "", "")\nif discordError != nil {\nreturn discordError\n}\n- messageLast, discordError := window.session.ChannelMessages(channel.ID, 100, "", messages[len(messages)-1].ID, "")\n- if discordError != nil {\n- return discordError\n+ if messages == nil || len(messages) == 0 {\n+ return nil\n}\n- messages = append(messages, messageLast[0])\n-\n- window.lastMessageID = &channel.LastMessageID\n+ window.lastMessageID = &messages[0].ID\n- sort.Slice(messages, func(x, y int) bool {\n- timeOne, parseError := messages[x].Timestamp.Parse()\n- if parseError != nil {\n- fmt.Println("Error 1")\n- return false\n+ //HACK: Reversing them, as they are sorted anyway.\n+ msgAmount := len(messages)\n+ for i := 0; i < msgAmount/2; i++ {\n+ j := msgAmount - i - 1\n+ messages[i], messages[j] = messages[j], messages[i]\n}\n- timeTwo, parseError := messages[y].Timestamp.Parse()\n- if parseError != nil {\n- fmt.Println("Error 2")\n- return false\n- }\n-\n- return timeOne.Before(timeTwo)\n- })\n-\nwindow.AddMessages(messages)\nreturn nil\n}\n'}], 'language': 'Go', 'license': 'BSD 3-Clause New or Revised License', 'repo': 'bios-marcel/cordless', 'original_message': 'Fix channel loading, now all messages are loaded and none are loaded twice'}
-    
+
 
 
 
@@ -290,7 +318,7 @@ print(
 ```
 
     3400
-    
+
 
 
 ```python
@@ -327,16 +355,16 @@ def plot_change_types(df):
 plot_change_types(df)  # We have a lot of MODIFY changes, ADD and DELETE are less frequent
 ```
 
-    C:\Users\Sesugh\AppData\Local\Temp\ipykernel_14656\1956563620.py:17: FutureWarning: 
+    /var/folders/ns/0spd8fg95tv2s7hys988_pb00000gp/T/ipykernel_52760/1956563620.py:17: FutureWarning: 
     
     Passing `palette` without assigning `hue` is deprecated and will be removed in v0.14.0. Assign the `y` variable to `hue` and set `legend=False` for the same effect.
     
       sns.barplot(x=change_types.values, y=change_types.index, palette="coolwarm")
-    
 
 
+
     
-![png](commit-chronicle-dataset_files/commit-chronicle-dataset_13_1.png)
+![png](commit-chronicle-dataset_files/commit-chronicle-dataset_15_1.png)
     
 
 
@@ -363,7 +391,7 @@ def analyze_commit_messages(df):
     # Plot
     words, counts = zip(*common_words)
     plt.figure(figsize=(12, 6))
-    sns.barplot(x=list(words), y=list(counts),  hue=list(words), legend=False)
+    sns.barplot(x=list(words), y=list(counts), hue=list(words), legend=False)
     plt.title("Top 20 Common Words in Commit Messages")
     plt.xlabel("Words")
     plt.ylabel("Frequency")
@@ -377,13 +405,13 @@ analyze_commit_messages(add_changes_df)
 
 
     
-![png](commit-chronicle-dataset_files/commit-chronicle-dataset_14_0.png)
+![png](commit-chronicle-dataset_files/commit-chronicle-dataset_16_0.png)
     
 
 
 
     
-![png](commit-chronicle-dataset_files/commit-chronicle-dataset_14_1.png)
+![png](commit-chronicle-dataset_files/commit-chronicle-dataset_16_1.png)
     
 
 
@@ -448,7 +476,7 @@ plt.show()  # We can see there is a difference between the most common words in 
 
 
     
-![png](commit-chronicle-dataset_files/commit-chronicle-dataset_15_0.png)
+![png](commit-chronicle-dataset_files/commit-chronicle-dataset_17_0.png)
     
 
 
@@ -483,9 +511,9 @@ kl_divergence_reverse = entropy(prob_add, prob_original)
 print(f"KL Divergence (Only ADD Commits || All Commits): {kl_divergence_reverse:.4f}")
 ```
 
-    KL Divergence (All Commits || Only ADD Commits): 5.7337
-    KL Divergence (Only ADD Commits || All Commits): 4.6380
-    
+    KL Divergence (All Commits || Only ADD Commits): 5.8358
+    KL Divergence (Only ADD Commits || All Commits): 4.6946
+
 
 Higher values for the KL Divergence (non-zero) indicate strong differences between both distributions
 
@@ -533,7 +561,7 @@ print(msg_input_ids_)
 
     Add code to retrieve the correct user directory on windows and linux ... and a somewhat okayish directory on macos"
     [986, 981, 358, 4614, 326, 3434, 729, 1867, 603, 9965, 471, 19725, 1372, 471, 279, 18016, 11304, 21194, 1468, 1867, 603, 5318, 538, 6]
-    
+
 
 Next, we'll look at the tokenization of git commit changes, `mods`. But before we do that, let's examine the structure of the data.
 
@@ -604,6 +632,7 @@ def preprocess_mods(mods: list[dict[str, str]], line_sep: str) -> str:
 
 # Let's test it out
 print(preprocess_mods(dataset[0]["mods"], line_sep="\n"))
+print(dataset[0]["message"])
 ```
 
     new file internal/config/config.go
@@ -709,9 +738,81 @@ print(preprocess_mods(dataset[0]["mods"], line_sep="\n"))
     + return filepath.Join(currentUser.HomeDir, "AppData", "Roaming", AppNameLowercase), nil
     +}
     
-    
+    Add code to retrieve the correct user directory on windows and linux ... and a somewhat okayish directory on macos"
 
-Now onto tokenization of the concatenated git diff or `mods`
+
+Let's analyze the length of commit messages and diffs in the dataset.
+
+
+```python
+def analyze_commit_lengths(dataset):
+    """Analyze lengths of commit messages and diffs, with examples of extremes."""
+    
+    # Process each commit to get lengths
+    messages = []
+    diffs = []
+    
+    for commit in dataset:
+        # Get message length
+        message = commit.get('message', '')
+        msg_len = len(message) if isinstance(message, str) else len(' '.join(map(str, message)))
+        messages.append({'length': msg_len, 'content': message, 'sha': commit.get('sha')})
+        
+        # Get diff length
+        diff = preprocess_mods(commit.get('mods', []), line_sep="\n")
+        diff_len = len(diff) if diff else 0
+        diffs.append({'length': diff_len, 'content': diff, 'sha': commit.get('sha')})
+    
+    # Find extremes
+    max_msg = max(messages, key=lambda x: x['length'])
+    min_msg = min(messages, key=lambda x: x['length'])
+    max_diff = max(diffs, key=lambda x: x['length'])
+    min_diff = min(diffs, key=lambda x: x['length'])
+    
+    # Calculate statistics
+    msg_lengths = [m['length'] for m in messages]
+    diff_lengths = [d['length'] for d in diffs]
+    
+    stats = pd.DataFrame({
+        'Metric': ['Average', 'Minimum', 'Maximum', 'Median'],
+        'Message Length': [
+            np.mean(msg_lengths),
+            np.min(msg_lengths),
+            np.max(msg_lengths),
+            np.median(msg_lengths)
+        ],
+        'Diff Length': [
+            np.mean(diff_lengths),
+            np.min(diff_lengths),
+            np.max(diff_lengths),
+            np.median(diff_lengths)
+        ]
+    })
+    
+    # Round statistics
+    stats.iloc[:, 1:] = stats.iloc[:, 1:].round(2)
+    
+    return stats, {
+        'longest_message': max_msg,
+        'shortest_message': min_msg,
+        'longest_diff': max_diff,
+        'shortest_diff': min_diff
+    }
+
+# Example usage
+stats, examples = analyze_commit_lengths(dataset)
+
+print("Statistics:")
+print(stats)
+```
+
+    Statistics:
+        Metric  Message Length  Diff Length
+    0  Average           77.14      3780.08
+    1  Minimum            4.00        24.00
+    2  Maximum          482.00     42506.00
+    3   Median           50.00      1623.00
+
 
 
 ```python
@@ -736,7 +837,112 @@ print(diff_input_ids_[:100], len(diff_input_ids_))
 ```
 
     [2704, 585, 2713, 19, 1425, 19, 1425, 18, 3240, 203, 15, 5610, 642, 203, 15, 203, 15, 5666, 315, 10219, 6, 203, 15, 203, 15, 1401, 261, 203, 15, 368, 3371, 461, 353, 326, 508, 5123, 326, 2521, 18, 203, 15, 4677, 461, 273, 315, 39, 517, 2656, 6, 203, 15, 368, 3371, 461, 4070, 3593, 353, 326, 23174, 508, 16, 1496, 12400, 18, 203, 15, 368, 7193, 584, 1399, 364, 3608, 87, 471, 4123, 18, 203, 15, 4677, 461, 4070, 3593, 273, 2064, 18, 774, 4070, 12, 3371, 461, 13, 203, 6975, 203, 15, 203, 15, 759, 809, 1914] 510
+
+
+
+```python
+diff_tokenizer_.vocab_size
+```
+
+
+
+
+    32100
+
+
+
+
+```python
+diff_tokenizer_.unk_token_id
+```
+
+
+
+
+    3
+
+
+
+
+```python
+def analyze_unknown_tokens(dataset, msg_tokenizer, diff_tokenizer, DIFF_MAX_LEN=512):
+    """
+    Analyze the percentage of unknown tokens in commit messages and diffs.
     
+    Parameters:
+    -----------
+    dataset : list
+        List of commit dictionaries
+    msg_tokenizer : tokenizer
+        Tokenizer for commit messages
+    diff_tokenizer : tokenizer
+        Tokenizer for diffs
+    DIFF_MAX_LEN : int, optional
+        Maximum length for diff tokenization
+    
+    Returns:
+    --------
+    pandas.DataFrame
+        A DataFrame with unknown token statistics
+    """
+    def count_unknown_tokens(tokenizer, texts):
+        # Get the UNK token ID
+        unk_token_id = tokenizer.unk_token_id
+        
+        # Tokenize texts
+        tokenized_texts = tokenizer(
+            texts, 
+            truncation=True,
+            max_length=DIFF_MAX_LEN - 2,
+            padding=False,
+            add_special_tokens=False
+        ).input_ids
+        
+        # Calculate UNK token percentages
+        total_tokens = sum(len(tokens) for tokens in tokenized_texts)
+        unknown_tokens = sum(
+            sum(1 for token in tokens if token == unk_token_id) 
+            for tokens in tokenized_texts
+        )
+        
+        return {
+            'total_tokens': total_tokens,
+            'unknown_tokens': unknown_tokens,
+            'unk_percentage': (unknown_tokens / total_tokens * 100) if total_tokens > 0 else 0
+        }
+    
+    # Prepare texts
+    messages = [commit.get('message', '') for commit in dataset]
+    diffs = [preprocess_mods(commit['mods'], line_sep="\n") for commit in dataset]
+    
+    # Analyze messages and diffs
+    msg_unk_stats = count_unknown_tokens(msg_tokenizer, messages)
+    diff_unk_stats = count_unknown_tokens(diff_tokenizer, diffs)
+    
+    # Create DataFrame
+    import pandas as pd
+    
+    unk_analysis = pd.DataFrame({
+        'Type': ['Messages', 'Diffs'],
+        'Total Tokens': [msg_unk_stats['total_tokens'], diff_unk_stats['total_tokens']],
+        'Unknown Tokens': [msg_unk_stats['unknown_tokens'], diff_unk_stats['unknown_tokens']],
+        'UNK Percentage': [
+            round(msg_unk_stats['unk_percentage'], 2), 
+            round(diff_unk_stats['unk_percentage'], 2)
+        ]
+    })
+    
+    return unk_analysis
+
+# Example usage
+unk_analysis = analyze_unknown_tokens(dataset, msg_tokenizer_, diff_tokenizer_)
+print(unk_analysis)
+```
+
+           Type  Total Tokens  Unknown Tokens  UNK Percentage
+    0  Messages       2468820               0             0.0
+    1     Diffs      51681941               0             0.0
+
 
 Let's put everything together to process `mods` and `message` columns for all rows in the dataset.
 
@@ -798,118 +1004,3 @@ dataset = load_from_disk(processed)
 ```python
 dataset.select(range(10)).to_pandas()
 ```
-
-
-
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>author</th>
-      <th>msg_input_ids</th>
-      <th>diff_input_ids</th>
-      <th>language</th>
-      <th>repo</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>0</th>
-      <td>770513</td>
-      <td>[986, 981, 358, 4614, 326, 3434, 729, 1867, 60...</td>
-      <td>[2704, 585, 2713, 19, 1425, 19, 1425, 18, 3240...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>1</th>
-      <td>770513</td>
-      <td>[986, 1390, 364, 5023, 326, 2521, 471, 19171, ...</td>
-      <td>[2704, 585, 276, 517, 2656, 18, 3240, 203, 15,...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>2</th>
-      <td>770513</td>
-      <td>[986, 279, 24778, 716, 22991, 4167, 326, 4422,...</td>
-      <td>[2704, 585, 10746, 958, 18, 1264, 203, 15, 7, ...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>3</th>
-      <td>770513</td>
-      <td>[986, 3270, 358, 1086, 707]</td>
-      <td>[7236, 19, 2910, 18, 3240, 203, 30989, 300, 26...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>4</th>
-      <td>770513</td>
-      <td>[5726, 2172, 7153, 16, 29288, 364, 946, 310, 4...</td>
-      <td>[6949, 958, 18, 1264, 203, 30989, 300, 5558, 1...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>5</th>
-      <td>770513</td>
-      <td>[6464, 4677, 461, 3152, 6810]</td>
-      <td>[7236, 19, 1425, 19, 1425, 18, 3240, 203, 3098...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>6</th>
-      <td>770513</td>
-      <td>[986, 1122, 4409, 18, 203, 1986, 4409, 1914, 7...</td>
-      <td>[7236, 19, 2910, 18, 3240, 203, 30989, 300, 27...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>7</th>
-      <td>770513</td>
-      <td>[7505, 279, 7934, 1625, 777, 2743, 434, 279, 1...</td>
-      <td>[7236, 19, 4881, 19, 5668, 18, 3240, 203, 3098...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>8</th>
-      <td>770513</td>
-      <td>[5058, 854, 2037, 777, 4203, 16, 309, 1915, 45...</td>
-      <td>[7236, 19, 4881, 19, 5668, 18, 3240, 203, 3098...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-    <tr>
-      <th>9</th>
-      <td>770513</td>
-      <td>[8585, 1904, 7153, 16, 2037, 777, 2743, 854, 4...</td>
-      <td>[7236, 19, 4881, 19, 5668, 18, 3240, 203, 3098...</td>
-      <td>Go</td>
-      <td>bios-marcel/cordless</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-
-

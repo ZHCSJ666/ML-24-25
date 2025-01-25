@@ -1,0 +1,17 @@
+_target_: src.data.commit_chronicle.CommitChronicleCLMDataModule
+data_dir: ${paths.data_dir}commit-chronicle
+languages: ["Go"]
+change_types: ["ADD"]
+huggingface_path: Rissou/simplified-commit-chronicle
+
+tokenizer:
+  _target_: src.data.components.tokenization.load_tokenizer
+  name_or_path: ???
+  task: clm
+
+input_max_len: 768
+
+# data loader stuff
+batch_size: 16 # Needs to be divisible by the number of devices (e.g., if in a distributed setup)
+num_workers: 15
+pin_memory: False

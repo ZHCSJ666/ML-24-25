@@ -1,16 +1,14 @@
 """Shamelessly lifted from https://github.com/JetBrains-Research/commit_message_generation"""
 
-from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import torch
 
+from .data_collator_base import DataCollatorBase
 from ...types import BatchTrain, SingleExample
-from .base_collator_utils import BaseCollatorUtils
 
 
-@dataclass
-class DataCollatorTrain(BaseCollatorUtils):
+class DataCollatorTrain(DataCollatorBase[BatchTrain]):
     """This class is used to construct batches out of lists of examples in training/validation
     setting.
 
@@ -23,6 +21,55 @@ class DataCollatorTrain(BaseCollatorUtils):
 
     shift_labels: bool
     decoder_start_token_id: Optional[int] = None
+
+    def __init__(
+        self,
+        diff_bos_token_id: int,
+        diff_eos_token_id: int,
+        diff_pad_token_id: int,
+        msg_bos_token_id: int,
+        msg_eos_token_id: int,
+        msg_pad_token_id: int,
+        msg_sep_token_id: int,
+        encoder_context_max_len: int,
+        decoder_context_max_len: int,
+        completion: bool,
+        split_ratio: float,
+        shift_labels: bool,
+        decoder_start_token_id: Optional[int] = None,
+    ):
+
+        super().__init__(
+            diff_bos_token_id,
+            diff_eos_token_id,
+            diff_pad_token_id,
+            msg_bos_token_id,
+            msg_eos_token_id,
+            msg_pad_token_id,
+            msg_sep_token_id,
+            encoder_context_max_len,
+            decoder_context_max_len,
+            completion,
+            split_ratio,
+        )
+        self.shift_labels = shift_labels
+        self.decoder_start_token_id = decoder_start_token_id
+
+    def __call__(self, examples: List[SingleExample]) -> BatchTrain:
+        """Processes a list of examples into a BatchTrain object."""
+        encoder_input_ids, encoder_attention_mask = self._process_encoder_input(examples=examples)
+
+        decoder_input_ids, decoder_attention_mask, labels = self._process_decoder_input(
+            examples=examples
+        )
+
+        return BatchTrain(
+            encoder_input_ids=encoder_input_ids,
+            encoder_attention_mask=encoder_attention_mask,
+            decoder_input_ids=decoder_input_ids,
+            decoder_attention_mask=decoder_attention_mask,
+            labels=labels,
+        )
 
     def _shift_for_encoder_decoder(
         self, ids: List[List[int]], labels: List[List[int]]
@@ -115,20 +162,4 @@ class DataCollatorTrain(BaseCollatorUtils):
             torch.stack(all_msg_ids),
             torch.stack(all_msg_masks),
             torch.stack(all_msg_labels),
-        )
-
-    def __call__(self, examples: List[SingleExample]) -> BatchTrain:
-        """Processes a list of examples into a BatchTrain object."""
-        encoder_input_ids, encoder_attention_mask = self._process_encoder_input(examples=examples)
-
-        decoder_input_ids, decoder_attention_mask, labels = self._process_decoder_input(
-            examples=examples
-        )
-
-        return BatchTrain(
-            encoder_input_ids=encoder_input_ids,
-            encoder_attention_mask=encoder_attention_mask,
-            decoder_input_ids=decoder_input_ids,
-            decoder_attention_mask=decoder_attention_mask,
-            labels=labels,
         )

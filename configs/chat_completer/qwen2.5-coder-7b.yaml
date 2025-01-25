@@ -1,0 +1,4 @@
+_target_: src.utils.chat_completion.OllamaChatCompleter
+model: qwen2.5-coder:7b
+tokenizer: Qwen/Qwen2.5-Coder-7B
+temperature: 0.0
