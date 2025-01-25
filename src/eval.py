@@ -6,6 +6,7 @@ import rootutils
 import torch
 from lightning import LightningDataModule, LightningModule, Trainer
 from lightning.pytorch.loggers import Logger
+from lightning.pytorch.utilities.model_summary import summarize
 from omegaconf import DictConfig
 
 torch.set_float32_matmul_precision("medium")
@@ -48,7 +49,8 @@ def evaluate(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     :param cfg: DictConfig configuration composed by Hydra.
     :return: Tuple[dict, dict] with metrics and dict with all instantiated objects.
     """
-    assert cfg.ckpt_path
+    if not cfg.ckpt_path:
+        log.warning("No checkpoint path provided")
 
     log.info(f"Instantiating datamodule <{cfg.data._target_}>")
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
@@ -69,6 +71,8 @@ def evaluate(cfg: DictConfig) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         "logger": logger,
         "trainer": trainer,
     }
+
+    print(summarize(model, max_depth=2))
 
     if logger:
         log.info("Logging hyperparameters!")

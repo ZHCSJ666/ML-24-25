@@ -1,10 +1,11 @@
 # @package _global_
 
 defaults:
-  - override /data: commit-chronicle
+  - override /data: commit-chronicle-seq2seq
+  - override /model: baseline-cmg-codet5
   - override /callbacks: default
   - override /trainer: gpu
-  - override /logger: tensorboard
+  - override /logger: wandb
 
 tags: ["commit-chronicle", "codet5", "t5", "baseline"]
 
@@ -13,33 +14,29 @@ seed: 12345
 trainer:
   min_epochs: 10
   max_epochs: 20
-#  gradient_clip_val: 1
+  precision: bf16-mixed
 
 model:
-  _target_: src.models.CommitMessageGenerationModule
   net:
-    _target_: src.models.components.seq2seq_wrapper.Seq2SeqWrapper
-    encoder_vocab_size:
-      _target_: builtins.len
-      _args_:
-        - ${data.diff_tokenizer}
-    decoder_vocab_size:
-      _target_: builtins.len
-      _args_:
-        - ${data.msg_tokenizer}
-    model:
-      _target_: transformers.AutoModelForSeq2SeqLM
-      pretrained_model_name_or_path: JetBrains-Research/cmg-codet5-without-history
+    tokenizer: ${data.diff_tokenizer}
+    decoder_tokenizer: ${data.msg_tokenizer}
 
 data:
+  change_types:
   batch_size: 16
-  diff_max_len: 512
-  msg_max_len: 512
+  diff_max_len: 1008
+  num_workers: 15
+  msg_max_len: 16
   diff_tokenizer:
     name_or_path: JetBrains-Research/cmg-codet5-without-history
   msg_tokenizer:
     name_or_path: JetBrains-Research/cmg-codet5-without-history
 
+logger:
+  wandb:
+    name: baseline-cmg-codet5-without-history
 
 # not interested in training baseline models
 train: False
+
+ckpt_path:

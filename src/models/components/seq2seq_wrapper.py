@@ -2,14 +2,11 @@ from typing import Any, Optional
 
 import torch
 import torch.nn as nn
-from transformers import (
-    EncoderDecoderConfig,
-    EncoderDecoderModel,
-    PreTrainedModel,
-)
+from transformers import PreTrainedModel, PreTrainedTokenizerFast
 from transformers.modeling_outputs import Seq2SeqLMOutput
-
+from loguru import logger
 from src.data.types import Batch
+from src.models.components.utils import update_tokenization_properties
 
 
 class Seq2SeqWrapper(nn.Module):
@@ -22,28 +19,26 @@ class Seq2SeqWrapper(nn.Module):
         model: Tokenizer for target sequences (messages)
         encoder_context_max_len: Maximum allowed input sequence length for encoder, used for initializing from scratch.
         decoder_context_max_len: Maximum allowed input sequence length for decoder, used for initializing from scratch.
-        encoder: Optional – name or path to pretrained checkpoint to initialize encoder.
-        decoder: Optional – name or path to pretrained checkpoint to initialize decoder.
-        tie_encoder_decoder: If set to `True`, encoder and decoder will share the same parameters
-          (should be used with the same model classes and tokenizers).
-        tie_word_embeddings: If set to `True`, encoder and decoder will share the same parameters for embedding layers
-          (should be used with the same model classes and tokenizers).
     """
 
     def __init__(
         self,
         model: Optional[PreTrainedModel] = None,
-        encoder: Optional[PreTrainedModel] = None,
-        decoder: Optional[PreTrainedModel] = None,
         encoder_context_max_len=None,
         decoder_context_max_len=None,
         encoder_vocab_size: Optional[int] = None,
         decoder_vocab_size: Optional[int] = None,
-        tie_encoder_decoder: Optional[bool] = None,
-        tie_word_embeddings: Optional[bool] = None,
+        tokenizer: Optional[PreTrainedTokenizerFast] = None,
+        decoder_tokenizer: Optional[PreTrainedTokenizerFast] = None,
+        init_weights: bool = False,
     ):
         super().__init__()
-        if model is not None:
+        if tokenizer is not None:
+            model = update_tokenization_properties(model, tokenizer, decoder_tokenizer)
+        elif encoder_vocab_size is not None and decoder_vocab_size is not None:
+            logger.warning(
+                "Passing `encoder_vocab_size` and `decoder_vocab_size` will be deprecated. Use `tokenizer` and `decoder_tokenizer` params instead."
+            )
             if decoder_vocab_size == encoder_vocab_size:
                 model.resize_token_embeddings(encoder_vocab_size)
             else:
@@ -52,22 +47,10 @@ class Seq2SeqWrapper(nn.Module):
                 model.lm_head = nn.Linear(
                     in_features=model.lm_head.in_features, out_features=decoder_vocab_size
                 )
-            self.model = model
-            # model.apply(model._init_weights)
-        else:
-            encoder.resize_token_embeddings(decoder_vocab_size)
-            decoder.resize_token_embeddings(decoder_vocab_size)
-            config = EncoderDecoderConfig.from_encoder_decoder_configs(
-                encoder_config=encoder.config, decoder_config=decoder.config  # type: ignore[attr-defined]
-            )
-            if tie_encoder_decoder is not None:
-                config.encoder.tie_encoder_decoder = tie_encoder_decoder
-                config.decoder.tie_encoder_decoder = tie_encoder_decoder
-                config.tie_encoder_decoder = tie_encoder_decoder
-            if tie_word_embeddings is not None:
-                config.tie_word_embeddings = tie_word_embeddings
-
-            self.model = EncoderDecoderModel(encoder=encoder, decoder=decoder, config=config)
+        if init_weights:
+            # noinspection PyProtectedMember
+            model.apply(model._init_weights)
+        self.model = model
 
     def forward(self, batch: Batch) -> dict[str, torch.Tensor]:
         output: Seq2SeqLMOutput = self.model(

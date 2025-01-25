@@ -14,35 +14,43 @@ seed: 12345
 trainer:
   min_epochs: 10
   max_epochs: 20
+              train/rougeLsum: 0.515 train/sacre_bleu1: 0.480 train/sacre_bleu4: 0.232
+100231 Epoch 7/49 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2749/2749 0:12:53 • 0:00  precision: bf16-mixed
 #  gradient_clip_val: 1
 
 model:
+  optimizer:
+    optimizer:
+      eps: 1e-7 # https://discuss.pytorch.org/t/nan-loss-issues-with-precision-16-in-pytorch-lightning-gan-training/204369/7
+      lr: 5e-3
+      weight_decay: 0 #1e-5
+  scheduler:
+    final_cosine: 8e-5
   net:
     encoder_context_max_len: 1008
     decoder_context_max_len: 16
-    encoder_vocab_size:
-      _target_: builtins.len
-      _args_:
-        - ${data.diff_tokenizer}
-    decoder_vocab_size:
-      _target_: builtins.len
-      _args_:
-        - ${data.msg_tokenizer}
+    tokenizer: ${data.diff_tokenizer}
+    decoder_tokenizer: ${data.msg_tokenizer}
     model:
       config:
-        d_ff: 512
+        d_ff: 128
         d_kv: 64
-        d_model: 128
-        num_layers: 4
-        num_decoder_layers: 4
-#        dropout_rate: 0.25
+        d_model: 64
+        num_layers: 5
+        num_decoder_layers: 5
+        classifier_dropout: 0.0
+        dropout_rate: 0.1
 
 data:
   change_types:
-  batch_size: 16
+  batch_size: 28
   diff_max_len: ${model.net.encoder_context_max_len}
   msg_max_len: ${model.net.decoder_context_max_len}
   diff_tokenizer:
     name_or_path: google/t5-efficient-tiny
   msg_tokenizer:
     name_or_path: google/t5-efficient-tiny
+
+logger:
+  wandb:
+    name: t5-extra-tiny
