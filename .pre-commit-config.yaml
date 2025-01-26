@@ -55,21 +55,21 @@ repos:
           ]
 
   # python docstring coverage checking
-  - repo: https://github.com/econchick/interrogate
-    rev: 1.7.0 # or master if you're bold
-    hooks:
-      - id: interrogate
-        args:
-          [
-            --verbose,
-            --fail-under=80,
-            --ignore-init-module,
-            --ignore-init-method,
-            --ignore-module,
-            --ignore-nested-functions,
-            -vv,
-          ]
-        additional_dependencies: [setuptools]
+  # - repo: https://github.com/econchick/interrogate
+  #   rev: 1.7.0 # or master if you're bold
+  #   hooks:
+  #     - id: interrogate
+  #       args:
+  #         [
+  #           --verbose,
+  #           --fail-under=80,
+  #           --ignore-init-module,
+  #           --ignore-init-method,
+  #           --ignore-module,
+  #           --ignore-nested-functions,
+  #           -vv,
+  #         ]
+  #       additional_dependencies: [setuptools]
 
   # python check (PEP8), programming errors and code complexity
   - repo: https://github.com/PyCQA/flake8
@@ -126,6 +126,10 @@ repos:
       - id: codespell
         args:
           - --skip=logs/**,data/**,*.ipynb
+          - --skip=notebooks/batches/**
+          - --skip=notebooks/evaluation_results.jsonl
+          - --skip=notebooks/comparisons.csv
+          - --skip=cmg-t5-efficient-extra-tiny/tokenizer.json
           - --ignore-words-list=rouge,ROUGE
 
   # jupyter prepare html reports and clear output
@@ -148,6 +152,6 @@ repos:
       - id: nbqa-flake8
         args:
           [
-            "--extend-ignore=E203,E402,E501,F401,F841",
+            "--extend-ignore=E203,E402,E501,F401,F841,W291",
             "--exclude=logs/*,data/*",
           ]

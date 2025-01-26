@@ -156,3 +156,5 @@ configs/local/default.yaml
 # pixi environments
 .pixi
 *.egg-info
+notebooks/comparisons.csv
+comparisons.csv
