@@ -28,7 +28,7 @@ class GPTChatCompleter(LLMChatCompleter):
 
     Attributes:
         PRICING_PER_1M_TOKENS (dict): A dictionary mapping supported models to their
-            pricing per million tokens.
+            USD pricing per million tokens.
         api_key (str): The OpenAI API key for authentication.
         model (str): The name of the GPT model to use.
         base_url (str): The base URL of the OpenAI-compatible API.
@@ -43,7 +43,9 @@ class GPTChatCompleter(LLMChatCompleter):
 
     PRICING_PER_1M_TOKENS = {
         "gpt-4o-mini-2024-07-18": 0.075,
-        "deepseek-chat": 0.14,
+        # discounted price until ... 2025-02-08 16:00 (UTC). See https://api-docs.deepseek.com/quick_start/pricing
+        "deepseek-chat": 0.014,
+        "deepseek-reasoner": 0.14,
     }
 
     def __init__(
@@ -53,10 +55,11 @@ class GPTChatCompleter(LLMChatCompleter):
         temperature: float,
         max_prompt_token_count: int,
         max_response_token_count: int,
-        batch_limit_tpd: int,
+        batch_limit_tpd: int = 2_000_000,
         tokenizer: str | None = None,
         base_url: str | None = None,
         num_proc: int | None = None,
+        response_format: dict[str, str] | None = None,
     ) -> None:
         """
         Initializes the GPTChatCompleter.
@@ -91,8 +94,9 @@ class GPTChatCompleter(LLMChatCompleter):
         self.max_prompt_token_count = max_prompt_token_count
         self.max_response_token_count = max_response_token_count
         self.num_proc = num_proc or mp.cpu_count()
+        self.response_format = response_format
 
-        # batch api stuff
+        # batch api stuff for OpenAI
         self.batch_limit_tpd = batch_limit_tpd
         self.batch_size = batch_limit_tpd // max_prompt_token_count
 
@@ -149,6 +153,7 @@ class GPTChatCompleter(LLMChatCompleter):
             messages=messages,
             temperature=self.temperature,
             max_tokens=self.max_response_token_count,
+            response_format=self.response_format,
         )
         return LLMChatCompleterResponse(
             content=response.choices[0].message.content,

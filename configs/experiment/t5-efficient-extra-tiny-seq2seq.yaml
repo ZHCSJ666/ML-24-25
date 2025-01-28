@@ -14,8 +14,7 @@ seed: 12345
 trainer:
   min_epochs: 10
   max_epochs: 20
-              train/rougeLsum: 0.515 train/sacre_bleu1: 0.480 train/sacre_bleu4: 0.232
-100231 Epoch 7/49 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2749/2749 0:12:53 • 0:00  precision: bf16-mixed
+  precision: bf16-mixed
 #  gradient_clip_val: 1
 
 model:

@@ -1,0 +1,11 @@
+_target_: src.models.LLMApiCommitMessageGenerationModule
+completer:
+  _target_: src.utils.chat_completion.GPTChatCompleter
+  model: deepseek-chat
+  # https://api-docs.deepseek.com/
+  base_url: https://api.deepseek.com/v1
+  tokenizer: deepseek-ai/DeepSeek-V3
+  api_key: ${oc.env:DEEPSEEK_API_KEY}
+  temperature: 0.0 # https://api-docs.deepseek.com/quick_start/parameter_settings
+  max_prompt_token_count: 1008
+  max_response_token_count: 16
