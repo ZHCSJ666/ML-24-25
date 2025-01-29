@@ -25,24 +25,12 @@ data:
   change_types:
   batch_size: 16
   num_workers: 15
-  # -1 to skip truncation
-  diff_max_len: -1
-  msg_max_len: -1
+  diff_max_len: 1008
+  msg_max_len: 16
   diff_tokenizer:
     name_or_path: JetBrains-Research/cmg-codet5-without-history
   msg_tokenizer:
     name_or_path: JetBrains-Research/cmg-codet5-without-history
-  # TODO: need to explain what these mean
-  truncation_diff_max_len: 1008
-  truncation_msg_max_len: 16
-  truncation_diff_tokenizer:
-    _target_: src.data.components.tokenization.load_tokenizer
-    name_or_path: google/t5-efficient-tiny
-    task: t5-truncate
-  truncation_msg_tokenizer:
-    _target_: src.data.components.tokenization.load_tokenizer
-    name_or_path: google/t5-efficient-tiny
-    task: t5-truncate
 
 logger:
   wandb:
