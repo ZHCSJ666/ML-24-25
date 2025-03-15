@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from transformers import AutoModelForCausalLM
 from transformers.modeling_outputs import CausalLMOutputWithPast
@@ -21,7 +22,7 @@ class DecoderWrapper(nn.Module):
         self.model = AutoModelForCausalLM.from_config(config)
         self.model.resize_token_embeddings(len(tokenizer))
 
-    def forward(self, batch: Batch):
+    def forward(self, batch: Batch) -> dict[str, torch.Tensor]:
         output: CausalLMOutputWithPast = self.model(
             input_ids=batch.input_ids,
             attention_mask=batch.attention_mask,

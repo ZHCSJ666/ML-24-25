@@ -1,0 +1,28 @@
+_target_: src.data.CommitChronicleLLMApiDataModule
+data_dir: ${paths.data_dir}commit-chronicle
+languages: ["Go"]
+change_types:
+huggingface_path: UHHBois/commit-chronicle-dataset-simplified
+
+# data loader stuff
+batch_size: 2
+num_workers: 4
+pin_memory: False
+
+completer: ???
+system_content: |-
+  You are a helpful assistant that generates commit messages
+  Create a commit message following these strict rules
+    - Maximum 16 words
+    - Use only these verbs: add, update, remove, fix, refactor
+    - Reference only code elements visible in the diff
+    - Format: "<verb> <optional code element> <brief detail>" e.g. Add documentation for unit testing
+    - Exclude all contextual information not visible in the code changes
+    - Focus on the technical change, not the purpose or impact
+    - Use consistent terminology for similar changes
+    - Use one sentence
+    - Output only the message without any explanation or formatting
+user_content_template: |-
+  Code changes:
+  {diff}
+max_prompt_token_count: 1008

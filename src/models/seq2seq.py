@@ -384,7 +384,7 @@ class Seq2SeqCommitMessageGenerationModule(LightningModule, TextLoggingMixin):
             targets = torch.where(targets == -100, self.msg_tokenizer.pad_token_id, targets)
             decoded_targets = self.decode_tgt(targets, skip_special_tokens=True)[0]
         else:
-            raise ValueError(f"No target set")
+            decoded_targets = [None for _ in decoded_preds]
 
         results = []
 
@@ -395,9 +395,11 @@ class Seq2SeqCommitMessageGenerationModule(LightningModule, TextLoggingMixin):
         ) in zip(decoded_inputs, decoded_preds, decoded_targets):
             item = {
                 "input": input_,
-                "prediction": pred,
-                "target": target,
+                "prediction": pred
+
             }
+            if target is not None:
+                item["target"] = target
             results.append(item)
         return results
 

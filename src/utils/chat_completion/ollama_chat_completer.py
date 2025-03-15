@@ -28,7 +28,7 @@ class OllamaChatCompleter(LLMChatCompleter):
         tokenizer: str,
         host: str = "http://localhost:11434",
         headers: dict[str, str] | None = None,
-        temperature: float = 0.7,
+        temperature: float = 0.0,
     ) -> None:
         """
         Initializes the OllamaChatCompleter.
@@ -90,5 +90,5 @@ class OllamaChatCompleter(LLMChatCompleter):
             max_length=sys.maxsize,
         )["input_ids"][0]
 
-    def decode(self, tokens: list[int]) -> list[int]:
+    def decode(self, tokens: list[int]) -> str:
         return self.tokenizer.decode(tokens, skip_special_tokens=True)

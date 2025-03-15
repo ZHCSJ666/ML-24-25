@@ -1,0 +1,28 @@
+# @package _global_
+
+defaults:
+  - override /data: commit-chronicle-llm-api
+  - override /model: baseline-deep-seek-v3
+  - override /callbacks: default
+  - override /trainer: cpu
+  - override /logger: wandb
+
+tags: ["commit-chronicle", "llm", "deep-seek", "deep-seek-v3", "api", "baseline"]
+
+
+model:
+  completer:
+    max_prompt_token_count: 1008
+
+data:
+  completer: ${model.completer}
+  max_prompt_token_count: 1008
+
+logger:
+  wandb:
+    name: baseline-deep-seek-v3
+
+# not interested in training baseline models
+train: False
+
+ckpt_path:

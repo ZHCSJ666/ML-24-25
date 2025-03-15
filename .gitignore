@@ -158,3 +158,9 @@ configs/local/default.yaml
 *.egg-info
 notebooks/comparisons.csv
 comparisons.csv
+
+# Data files
+*.jsonl
+*.csv
+notebooks/comparisons.csv
+comparisons.csv

@@ -19,6 +19,10 @@ trainer:
 model:
   net:
     tokenizer: ${data.tokenizer}
+    config:
+      num_hidden_layers: 1
+      max_position_embeddings: 1024
+      intermediate_size: 256
   generation_kwargs:
     max_new_tokens: 64
 

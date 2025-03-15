@@ -150,6 +150,7 @@ class CommitChronicleSeq2SeqDataModule(LightningDataModule):
                     batch_size=1000,
                     remove_columns=dataset.column_names,
                     num_proc=max(1, multiprocessing.cpu_count() - 1),
+                    desc=f"Creating tokenized dataset for {split}.",
                 )
                 dataset.save_to_disk(tokenized_path)
 
@@ -220,13 +221,14 @@ class CommitChronicleSeq2SeqDataModule(LightningDataModule):
 
 
 class DataCollatorWrapper:
-    def __init__(self, tokenizer: PreTrainedTokenizerFast, is_train_val: bool):
+    def __init__(self, tokenizer: PreTrainedTokenizerFast, is_train_val: bool = False):
         self.collator = DataCollatorForSeq2Seq(tokenizer=tokenizer)
         self.is_train_val = is_train_val
 
     def __call__(self, examples):
         batch = self.collator(examples)
-        assert torch.is_tensor(batch["labels"])
+        if self.is_train_val:
+            assert torch.is_tensor(batch["labels"])
         return Batch(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
@@ -235,7 +237,7 @@ class DataCollatorWrapper:
             # See https://huggingface.co/docs/transformers/glossary#decoder-input-ids
             decoder_input_ids=None,
             decoder_attention_mask=None,
-            labels=batch["labels"],
+            labels=batch.get("labels", None),
         )
 
 

@@ -1,0 +1,68 @@
+# @package _global_
+
+experiments:
+  - name: t5-efficient-extra-tiny
+    wandb_run_id: dal1bftd
+  - name: baseline-deep-seek-v3
+    wandb_run_id: xoduz4r5
+  - name: baseline-cmg-codet5-without-history
+    wandb_run_id: 6swi6qm9
+
+
+completer:
+  _target_: src.utils.chat_completion.GPTChatCompleter
+  model: gpt-4o-mini-2024-07-18
+  api_key: ${oc.env:OPENAI_API_KEY}
+  # batch queue limit for gpt-4o-mini https://platform.openai.com/settings/organization/limits
+  batch_limit_tpd: 2_000_000
+  temperature: 0.0
+  max_prompt_token_count: 2000
+  max_response_token_count: 16
+  response_format:
+    type: json_object
+#  _target_: src.utils.chat_completion.GPTChatCompleter
+#  model: deepseek-chat
+#  # https://api-docs.deepseek.com/
+#  base_url: https://api.deepseek.com/v1
+#  tokenizer: deepseek-ai/DeepSeek-V3
+#  api_key: ${oc.env:DEEPSEEK_API_KEY}
+#  temperature: 0.0 # https://api-docs.deepseek.com/quick_start/parameter_settings
+#  max_prompt_token_count: 2000
+#  max_response_token_count: 16
+#  response_format:
+#    type: json_object
+
+
+prompt: |-
+  Given a code diff and two commit messages (one from a model and one target message), evaluate the model message on a 
+  scale of 1-10 based on how well it captures the essence of the target message while maintaining clarity and relevance 
+  to the changes.
+
+  Code diff:
+  {diff}
+
+  Model Message: {model_message}
+  Target Message: {target_message}
+
+  Provide your response in JSON format:
+  {{
+      "score": <score>
+  }}
+
+num_samples_for_llm_evaluation: 3000
+# set false to just count number of tokens
+llm_evaluation: True
+llm_evaluation_suffix: gpt4o_mini_1-to-10 # deep_seek_v3_1-to-10 gpt4o_mini_1-to-10
+
+# this requires WANDB_API_KEY environment variable to exist
+wandb_api_key: ${oc.env:WANDB_API_KEY}
+
+# path to root directory
+# this requires PROJECT_ROOT environment variable to exist
+root_dir: ${oc.env:PROJECT_ROOT}
+
+output_dir: ${.root_dir}/data/benchmark
+
+hydra:
+  run:
+    dir: ${...root_dir}/logs/benchmark/runs/${now:%Y-%m-%d}_${now:%H-%M-%S}

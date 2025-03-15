@@ -24,8 +24,8 @@ model:
 data:
   change_types:
   batch_size: 16
-  diff_max_len: 1008
   num_workers: 15
+  diff_max_len: 1008
   msg_max_len: 16
   diff_tokenizer:
     name_or_path: JetBrains-Research/cmg-codet5-without-history
