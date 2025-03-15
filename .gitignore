@@ -162,3 +162,5 @@ comparisons.csv
 # Data files
 *.jsonl
 *.csv
+notebooks/comparisons.csv
+comparisons.csv
