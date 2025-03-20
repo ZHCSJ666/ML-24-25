@@ -39,6 +39,10 @@ If for some reason, imports are not working well for you, you can install the pr
 pip install -e . --config-settings editable_mode=compat
 ```
 
+## Trained Models
+
+The checkpoints for the trained T5-Efficient-Extra-Tiny model can be found  [here](https://drive.google.com/file/d/1ewJuElLSgVrwzLO3ujsJkUECCNho-5Ad/view?usp=sharing).
+Extract the downloaded zip file into project root.
 ## **Data Simplification**
 
 The main script for dataset simplification is **[src/simplify_data.py](src/simplify_data.py)**, with its corresponding configuration file located at **[configs/simplify-data.yaml](configs/simplify-data.yaml)**.
